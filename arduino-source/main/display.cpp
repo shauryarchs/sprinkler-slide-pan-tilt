@@ -1,4 +1,5 @@
 #include "display.h"
+#include "pot.h"
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -15,8 +16,13 @@ namespace {
   // to call from inside the motor's tight pulse loops.
   Mode lastMode = (Mode)-1;
   unsigned int lastDelay = 0;
+  bool lastCW = true;
+  bool lastPotDriving = false;
+  unsigned long lastDrawMs = 0;
+  const unsigned long DRAW_THROTTLE_MS = 100;
 
-  const __FlashStringHelper* modeName(Mode m) {
+  const __FlashStringHelper* modeName(Mode m, bool potDriving) {
+    if (potDriving) return F("POT");
     switch (m) {
       case MODE_DANCE:  return F("DANCE");
       case MODE_SMOOTH: return F("SMOOTH");
@@ -49,29 +55,51 @@ void Display::showBanner() {
   delay(1500);
 }
 
-void Display::update(Mode mode, unsigned int smoothDelay) {
-  if (mode == lastMode && smoothDelay == lastDelay) return;
-  lastMode = mode;
-  lastDelay = smoothDelay;
+void Display::update(Mode mode, unsigned int smoothDelay, bool cw) {
+  // When idle and the pot is deflected, render as a "POT" screen with the
+  // pot's live direction and speed; otherwise show whatever the caller passed.
+  bool potDriving = (mode == MODE_IDLE) && Pot::isActive();
+  unsigned int delayShown = potDriving ? Pot::speedDelayUs() : smoothDelay;
+  bool cwShown            = potDriving ? Pot::isCW()         : cw;
+
+  if (mode == lastMode && delayShown == lastDelay && cwShown == lastCW
+      && potDriving == lastPotDriving) return;
+
+  // Throttle redraws to avoid saturating I2C while the pot is being
+  // continuously turned (mode/direction changes still bypass the throttle).
+  bool stateChanged = (mode != lastMode) || (cwShown != lastCW)
+                      || (potDriving != lastPotDriving);
+  unsigned long now = millis();
+  if (!stateChanged && (now - lastDrawMs) < DRAW_THROTTLE_MS) return;
+
+  lastMode        = mode;
+  lastDelay       = delayShown;
+  lastCW          = cwShown;
+  lastPotDriving  = potDriving;
+  lastDrawMs      = now;
 
   oled.clearDisplay();
   oled.setTextColor(SSD1306_WHITE);
 
   oled.setTextSize(2);
   oled.setCursor(0, 0);
-  oled.print(modeName(mode));
+  oled.print(modeName(mode, potDriving));
 
-  if (mode == MODE_SMOOTH) {
+  bool showSpeedUI = (mode == MODE_SMOOTH) || potDriving;
+  if (showSpeedUI) {
     oled.setTextSize(1);
+    oled.setCursor(80, 4);
+    oled.print(cwShown ? F("CW") : F("CCW"));
+
     oled.setCursor(0, 24);
     oled.print(F("delay: "));
-    oled.print(smoothDelay);
+    oled.print(delayShown);
     oled.println(F(" us"));
 
     // Speed bar — shorter delay = longer bar.
     const long MIN_D = 150;
     const long MAX_D = 2000;
-    long w = (long)(MAX_D - (long)smoothDelay) * 128 / (MAX_D - MIN_D);
+    long w = (long)(MAX_D - (long)delayShown) * 128 / (MAX_D - MIN_D);
     if (w < 0) w = 0;
     if (w > 128) w = 128;
     oled.fillRect(0, 40, w, 8, SSD1306_WHITE);

@@ -1,4 +1,5 @@
 #include "motor.h"
+#include "pot.h"
 
 const int STEP_PIN = 3;
 const int DIR_PIN  = 2;
@@ -13,6 +14,7 @@ const unsigned int SMOOTH_MIN_DELAY_US     = 150;
 namespace {
   Mode mode = MODE_IDLE;
   unsigned int smoothTargetDelay = SMOOTH_DEFAULT_DELAY_US;
+  bool smoothCW = true;
 
   struct Move {
     bool clockwise;
@@ -71,14 +73,66 @@ namespace {
     }
   }
 
+  void runPot() {
+    // Active when mode == MODE_IDLE. Pot deflection drives both direction
+    // and speed. Returns when pot returns to deadband or a button/serial
+    // command changes mode.
+    if (!Pot::isActive()) return;
+
+    bool dirOnPin = Pot::isCW();
+    digitalWrite(DIR_PIN, dirOnPin ? DIR_CW : DIR_CCW);
+    delayMicroseconds(5);
+    unsigned int rampDelay = SMOOTH_START_DELAY_US;
+
+    while (mode == MODE_IDLE && Pot::isActive()) {
+      tick();
+      if (mode != MODE_IDLE || !Pot::isActive()) return;
+
+      // Mid-spin reversal: re-ramp from start so we don't slam the rotor.
+      bool curDir = Pot::isCW();
+      if (curDir != dirOnPin) {
+        dirOnPin = curDir;
+        digitalWrite(DIR_PIN, dirOnPin ? DIR_CW : DIR_CCW);
+        delayMicroseconds(5);
+        rampDelay = SMOOTH_START_DELAY_US;
+      }
+
+      // Honor the slower of (a) the user's pot target and (b) the ramp,
+      // so we never step faster than the ramp allows.
+      unsigned int target = Pot::speedDelayUs();
+      unsigned int d = (rampDelay > target) ? rampDelay : target;
+
+      digitalWrite(STEP_PIN, HIGH);
+      delayMicroseconds(d);
+      digitalWrite(STEP_PIN, LOW);
+      delayMicroseconds(d);
+
+      if (rampDelay > target) {
+        unsigned int dec = SMOOTH_RAMP_STEP_US;
+        if (rampDelay - target < dec) rampDelay = target;
+        else rampDelay -= dec;
+      }
+    }
+  }
+
   void runSmooth() {
-    digitalWrite(DIR_PIN, DIR_CW);
+    bool dirOnPin = smoothCW;
+    digitalWrite(DIR_PIN, dirOnPin ? DIR_CW : DIR_CCW);
     delayMicroseconds(5);
     unsigned int stepDelay = SMOOTH_START_DELAY_US;
 
     while (mode == MODE_SMOOTH) {
       tick();
       if (mode != MODE_SMOOTH) return;
+
+      // Direction reversed mid-spin: re-ramp from start so we don't lose
+      // steps slamming the rotor into the opposite direction at full speed.
+      if (smoothCW != dirOnPin) {
+        dirOnPin = smoothCW;
+        digitalWrite(DIR_PIN, dirOnPin ? DIR_CW : DIR_CCW);
+        delayMicroseconds(5);
+        stepDelay = SMOOTH_START_DELAY_US;
+      }
 
       digitalWrite(STEP_PIN, HIGH);
       delayMicroseconds(stepDelay);
@@ -108,6 +162,16 @@ Mode Motor::getMode() { return mode; }
 
 unsigned int Motor::getSmoothDelay() { return smoothTargetDelay; }
 
+bool Motor::isSmoothCW() { return smoothCW; }
+
+void Motor::startSmooth(bool cw) {
+  // Only reset target speed when entering smooth from another mode; a
+  // direction flip while already smooth keeps the user's chosen speed.
+  if (mode != MODE_SMOOTH) smoothTargetDelay = SMOOTH_DEFAULT_DELAY_US;
+  smoothCW = cw;
+  mode = MODE_SMOOTH;
+}
+
 void Motor::faster() {
   if (mode != MODE_SMOOTH) {
     Serial.println(F("(press 'r' first - 'f' only works in smooth mode)"));
@@ -125,6 +189,6 @@ void Motor::update() {
   switch (mode) {
     case MODE_DANCE:  runDance();  break;
     case MODE_SMOOTH: runSmooth(); break;
-    case MODE_IDLE:   break;
+    case MODE_IDLE:   runPot();    break;
   }
 }

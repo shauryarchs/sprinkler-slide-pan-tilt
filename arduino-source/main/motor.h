@@ -10,6 +10,8 @@ namespace Motor {
   Mode getMode();
   unsigned int getSmoothDelay();
   void faster();              // halve smooth-mode delay (doubles speed)
+  void startSmooth(bool cw);  // enter smooth mode in the given direction
+  bool isSmoothCW();
 }
 
 // Defined in main.ino. Called between motor pulses so the rest of the

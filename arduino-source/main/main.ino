@@ -1,5 +1,5 @@
 // Stepper + OLED — main entry point.
-// Wires together the Motor and Display modules and parses serial commands.
+// Wires together the Motor, Display, and Buttons modules and parses serial commands.
 //
 // Serial Monitor (9600 baud):
 //   'd' -> dance routine
@@ -7,25 +7,48 @@
 //   'f' -> double smooth speed (halves half-period)
 //   's' -> stop
 //
+// Buttons (tap to toggle; latched until stop / opposite direction):
+//   D4 -> spin CCW (left)    D5 -> spin CW (right)    D6 -> stop
+//   Wired button-to-GND, internal INPUT_PULLUP enabled.
+//
+// Potentiometer (live only when motor is IDLE; ~5 % deadband around center):
+//   Wiper -> A0   Outer legs -> 5V and GND
+//   Deflect right of center = CW, left = CCW; magnitude sets speed.
+//
 // Wiring (Arduino Uno):
 //   A4988 STEP -> D3   A4988 DIR  -> D2   (motor power separate on VMOT/GND)
-//   OLED  SDA  -> A4   OLED  SCL  -> A5   OLED VCC -> 5V   OLED GND -> GND
+//   OLED  SDA  -> A4   OLED  SCL  -> A5   OLED VCC -> 3.3V   OLED GND -> GND
 
 #include "motor.h"
 #include "display.h"
+#include "buttons.h"
+#include "pot.h"
 
 void pollSerial() {
   if (Serial.available() <= 0) return;
   char c = Serial.read();
   switch (c) {
     case 'd': case 'D':
-      Motor::setMode(MODE_DANCE);  Serial.println(F("dancing")); break;
+      Motor::setMode(MODE_DANCE);   Serial.println(F("dancing")); break;
     case 'r': case 'R':
-      Motor::setMode(MODE_SMOOTH); Serial.println(F("smooth"));  break;
+      Motor::startSmooth(true);     Serial.println(F("smooth CW"));  break;
     case 'f': case 'F':
       Motor::faster(); break;
     case 's': case 'S':
-      Motor::setMode(MODE_IDLE);   Serial.println(F("stopped")); break;
+      Motor::setMode(MODE_IDLE);    Serial.println(F("stopped")); break;
+  }
+}
+
+void pollButtons() {
+  switch (Buttons::pollEvent()) {
+    case Buttons::EVENT_LEFT:
+      Motor::startSmooth(false);    Serial.println(F("btn: CCW")); break;
+    case Buttons::EVENT_RIGHT:
+      Motor::startSmooth(true);     Serial.println(F("btn: CW"));  break;
+    case Buttons::EVENT_STOP:
+      Motor::setMode(MODE_IDLE);    Serial.println(F("btn: stop")); break;
+    case Buttons::EVENT_NONE:
+      break;
   }
 }
 
@@ -34,18 +57,22 @@ void pollSerial() {
 // mode/speed change rather than every pulse.
 void tick() {
   pollSerial();
-  Display::update(Motor::getMode(), Motor::getSmoothDelay());
+  pollButtons();
+  Display::update(Motor::getMode(), Motor::getSmoothDelay(), Motor::isSmoothCW());
 }
 
 void setup() {
   Serial.begin(9600);
   Motor::begin();
+  Buttons::begin();
+  Pot::begin();
   if (!Display::begin()) {
     Serial.println(F("continuing without display"));
   } else {
     Display::showBanner();
   }
   Serial.println(F("Send 'd' to dance, 'r' for smooth, 'f' to double speed, 's' to stop."));
+  Serial.println(F("Or use buttons: D4=CCW, D5=CW, D6=stop."));
 }
 
 void loop() {
