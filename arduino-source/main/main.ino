@@ -2,8 +2,8 @@
 // Wires together the Motor and Display modules and parses serial commands.
 //
 // Serial Monitor (9600 baud):
-//   'r' -> dance routine
-//   't' -> smooth clockwise spin
+//   'd' -> dance routine
+//   'r' -> smooth clockwise spin
 //   'f' -> double smooth speed (halves half-period)
 //   's' -> stop
 //
@@ -18,9 +18,9 @@ void pollSerial() {
   if (Serial.available() <= 0) return;
   char c = Serial.read();
   switch (c) {
-    case 'r': case 'R':
+    case 'd': case 'D':
       Motor::setMode(MODE_DANCE);  Serial.println(F("dancing")); break;
-    case 't': case 'T':
+    case 'r': case 'R':
       Motor::setMode(MODE_SMOOTH); Serial.println(F("smooth"));  break;
     case 'f': case 'F':
       Motor::faster(); break;
@@ -45,7 +45,7 @@ void setup() {
   } else {
     Display::showBanner();
   }
-  Serial.println(F("Send 'r' to dance, 't' for smooth, 'f' to double speed, 's' to stop."));
+  Serial.println(F("Send 'd' to dance, 'r' for smooth, 'f' to double speed, 's' to stop."));
 }
 
 void loop() {

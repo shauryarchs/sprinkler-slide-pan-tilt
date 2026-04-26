@@ -110,7 +110,7 @@ unsigned int Motor::getSmoothDelay() { return smoothTargetDelay; }
 
 void Motor::faster() {
   if (mode != MODE_SMOOTH) {
-    Serial.println(F("(press 't' first - 'f' only works in smooth mode)"));
+    Serial.println(F("(press 'r' first - 'f' only works in smooth mode)"));
     return;
   }
   unsigned int next = smoothTargetDelay / 2;

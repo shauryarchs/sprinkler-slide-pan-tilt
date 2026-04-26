@@ -42,7 +42,7 @@ void Display::showBanner() {
   oled.println(F("Stepper"));
   oled.setTextSize(1);
   oled.setCursor(0, 24);
-  oled.println(F("r=dance  t=smooth"));
+  oled.println(F("d=dance  r=smooth"));
   oled.setCursor(0, 36);
   oled.println(F("f=faster s=stop"));
   oled.display();
@@ -79,9 +79,9 @@ void Display::update(Mode mode, unsigned int smoothDelay) {
   } else if (mode == MODE_IDLE) {
     oled.setTextSize(1);
     oled.setCursor(0, 24);
-    oled.println(F("r=dance"));
+    oled.println(F("d=dance"));
     oled.setCursor(0, 36);
-    oled.println(F("t=smooth"));
+    oled.println(F("r=smooth"));
   }
 
   oled.display();
