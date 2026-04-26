@@ -8,7 +8,9 @@
 //   's' -> stop
 //
 // Buttons (tap to toggle; latched until stop / opposite direction):
-//   D4 -> spin CCW (left)    D5 -> spin CW (right)    D6 -> stop
+//   D4 (blue)  -> spin CCW (left)
+//   D5 (green) -> spin CW (right)
+//   D6 (red)   -> stop
 //   Wired button-to-GND, internal INPUT_PULLUP enabled.
 //
 // Potentiometer (live only when motor is IDLE; ~5 % deadband around center):
