@@ -6,9 +6,9 @@ const int DIR_PIN  = 2;
 const int DIR_CW   = LOW;
 const int DIR_CCW  = HIGH;
 
-const unsigned int SMOOTH_DEFAULT_DELAY_US = 233;  // 3x the previous 700 us speed
-const unsigned int SMOOTH_START_DELAY_US   = 2000;
-const unsigned int SMOOTH_RAMP_STEP_US     = 4;
+const unsigned int SMOOTH_DEFAULT_DELAY_US = 300; 
+const unsigned int SMOOTH_START_DELAY_US   = 1000;
+const unsigned int SMOOTH_RAMP_STEP_US     = 16;
 const unsigned int SMOOTH_MIN_DELAY_US     = 150;
 
 namespace {
@@ -77,32 +77,37 @@ namespace {
   // can keep up with reasonable knob-turning speeds without missing steps.
   const unsigned int POT_STEP_DELAY_US = 500;
 
+  // Steps processed per inner-loop pass before re-polling the pot.
+  // Smaller = more responsive to pot stop, but slightly less max throughput.
+  const long POT_BATCH = 8;
+
   void runPot() {
-    // Active only when mode == MODE_IDLE. The pot acts as a position
-    // encoder: each call we ask Pot for the signed step delta accumulated
-    // since last poll, then pulse the motor that many times in the right
-    // direction. No deflection ⇒ no movement.
-    long delta = Pot::pollDelta();
-    if (delta == 0) return;
+    // Active only when mode == MODE_IDLE. We process the pot in small
+    // batches and re-poll between them. The instant the pot stops moving,
+    // pollDelta() returns 0 and we exit — the motor stops rather than
+    // running off any backlog. Side effect: a very fast knob sweep can
+    // leave the motor a few steps behind where the pot ended up, since
+    // we explicitly do NOT chase the residual after the pot stops.
+    while (mode == MODE_IDLE) {
+      long delta = Pot::pollDelta();
+      if (delta == 0) return;
 
-    bool cw = delta > 0;
-    long n  = (delta > 0) ? delta : -delta;
+      bool cw = delta > 0;
+      long n  = (delta > 0) ? delta : -delta;
+      if (n > POT_BATCH) n = POT_BATCH;
 
-    digitalWrite(DIR_PIN, cw ? DIR_CW : DIR_CCW);
-    delayMicroseconds(5);
+      digitalWrite(DIR_PIN, cw ? DIR_CW : DIR_CCW);
+      delayMicroseconds(5);
 
-    for (long i = 0; i < n; i++) {
-      digitalWrite(STEP_PIN, HIGH);
-      delayMicroseconds(POT_STEP_DELAY_US);
-      digitalWrite(STEP_PIN, LOW);
-      delayMicroseconds(POT_STEP_DELAY_US);
-
-      // Stay responsive to button/serial input mid-burst, but not on
-      // every step (the I2C/serial overhead would slow tracking).
-      if ((i & 7) == 0) {
-        tick();
-        if (mode != MODE_IDLE) return;
+      for (long i = 0; i < n; i++) {
+        digitalWrite(STEP_PIN, HIGH);
+        delayMicroseconds(POT_STEP_DELAY_US);
+        digitalWrite(STEP_PIN, LOW);
+        delayMicroseconds(POT_STEP_DELAY_US);
       }
+
+      tick();
+      if (mode != MODE_IDLE) return;
     }
   }
 
