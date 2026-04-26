@@ -15,9 +15,10 @@
 //
 // Potentiometer (live only when motor is IDLE):
 //   Wiper -> A0   Outer legs -> 5V and GND
-//   Acts as a position encoder: 1° of pot rotation = 1° of motor rotation.
-//   Turn the knob -> motor follows; stop turning -> motor stops. Direction
-//   matches knob direction (swap the 5V/GND outer legs to invert).
+//   Acts as a position encoder. Pot is ~270° physical rotation;
+//   full knob range -> ten full motor revolutions (3600°), i.e. ~13.3°
+//   motor per 1° knob. Turn the knob -> motor follows; stop turning ->
+//   motor stops. Direction matches knob (swap 5V/GND outer legs to invert).
 //
 // Wiring (Arduino Uno):
 //   A4988 STEP -> D3   A4988 DIR  -> D2   (motor power separate on VMOT/GND)

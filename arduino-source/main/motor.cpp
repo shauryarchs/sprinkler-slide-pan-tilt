@@ -6,7 +6,7 @@ const int DIR_PIN  = 2;
 const int DIR_CW   = LOW;
 const int DIR_CCW  = HIGH;
 
-const unsigned int SMOOTH_DEFAULT_DELAY_US = 700;
+const unsigned int SMOOTH_DEFAULT_DELAY_US = 233;  // 3x the previous 700 us speed
 const unsigned int SMOOTH_START_DELAY_US   = 2000;
 const unsigned int SMOOTH_RAMP_STEP_US     = 4;
 const unsigned int SMOOTH_MIN_DELAY_US     = 150;
