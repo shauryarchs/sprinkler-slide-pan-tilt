@@ -1,49 +1,57 @@
 #include "pot.h"
 
-const uint8_t POT_PIN          = A0;
-const int     POT_CENTER       = 512;     // ADC midpoint at 5 V ref
-const int     POT_DEADBAND     = 25;      // ~5 % each side of center
-const unsigned int POT_MAX_DELAY_US = 2000; // slowest step rate
-const unsigned int POT_MIN_DELAY_US = 150;  // fastest step rate
-const unsigned long POT_CACHE_MS    = 5;    // refresh interval
+const uint8_t POT_PIN = A0;
+
+// Hardware-dependent — tune to your pot and stepper if 1° pot ≠ 1° motor.
+//   POT_USABLE_DEG    : mechanical degrees the pot's wiper traverses
+//                       (typical linear pots ~270°; some are 300°)
+//   MOTOR_STEPS_PER_REV : full-steps per revolution × A4988 microstep factor
+//                         (NEMA 17 full step = 200; ×16 microstep = 3200)
+const long POT_USABLE_DEG      = 270;
+const long MOTOR_STEPS_PER_REV = 200;
+const long ADC_RES             = 1024;
+
+// Conversion: motor_steps = adc * MOTOR_STEPS_PER_REV * POT_USABLE_DEG
+//                                / (ADC_RES * 360)
+// With the defaults above this is ~0.146 steps per ADC count, i.e. ~7
+// counts per step — small enough that typical ±1–2 ADC noise stays below
+// the step threshold and won't twitch the motor at rest.
+
+const unsigned long ACTIVE_TIMEOUT_MS = 500;
 
 namespace {
-  unsigned long lastReadMs = 0;
-  bool          primed     = false;
-  int           cachedDelta = 0;
+  long          lastReportedSteps = 0;
+  unsigned long lastActiveMs      = 0;
 
-  void refresh() {
-    unsigned long now = millis();
-    if (!primed || now - lastReadMs >= POT_CACHE_MS) {
-      cachedDelta = analogRead(POT_PIN) - POT_CENTER;
-      lastReadMs = now;
-      primed = true;
-    }
+  long adcToSteps(int adc) {
+    return ((long)adc * MOTOR_STEPS_PER_REV * POT_USABLE_DEG) / (ADC_RES * 360);
+  }
+
+  long readSteps() {
+    return adcToSteps(analogRead(POT_PIN));
   }
 }
 
 void Pot::begin() {
-  cachedDelta = analogRead(POT_PIN) - POT_CENTER;
-  lastReadMs  = millis();
-  primed      = true;
+  lastReportedSteps = readSteps();
+  lastActiveMs      = 0;
+}
+
+void Pot::resync() {
+  lastReportedSteps = readSteps();
+}
+
+long Pot::pollDelta() {
+  long current = readSteps();
+  long delta   = current - lastReportedSteps;
+  if (delta != 0) {
+    lastReportedSteps = current;
+    lastActiveMs      = millis();
+  }
+  return delta;
 }
 
 bool Pot::isActive() {
-  refresh();
-  return abs(cachedDelta) > POT_DEADBAND;
-}
-
-bool Pot::isCW() {
-  refresh();
-  return cachedDelta > 0;
-}
-
-unsigned int Pot::speedDelayUs() {
-  refresh();
-  int absDelta = abs(cachedDelta);
-  if (absDelta <= POT_DEADBAND) return POT_MAX_DELAY_US;
-  unsigned int mag    = absDelta - POT_DEADBAND;
-  unsigned int maxMag = 511 - POT_DEADBAND;
-  if (mag > maxMag) mag = maxMag;
-  return map(mag, 0, maxMag, POT_MAX_DELAY_US, POT_MIN_DELAY_US);
+  if (lastActiveMs == 0) return false;
+  return (millis() - lastActiveMs) < ACTIVE_TIMEOUT_MS;
 }

@@ -73,44 +73,35 @@ namespace {
     }
   }
 
+  // Step half-period when tracking the pot. Short enough that the motor
+  // can keep up with reasonable knob-turning speeds without missing steps.
+  const unsigned int POT_STEP_DELAY_US = 500;
+
   void runPot() {
-    // Active when mode == MODE_IDLE. Pot deflection drives both direction
-    // and speed. Returns when pot returns to deadband or a button/serial
-    // command changes mode.
-    if (!Pot::isActive()) return;
+    // Active only when mode == MODE_IDLE. The pot acts as a position
+    // encoder: each call we ask Pot for the signed step delta accumulated
+    // since last poll, then pulse the motor that many times in the right
+    // direction. No deflection ⇒ no movement.
+    long delta = Pot::pollDelta();
+    if (delta == 0) return;
 
-    bool dirOnPin = Pot::isCW();
-    digitalWrite(DIR_PIN, dirOnPin ? DIR_CW : DIR_CCW);
+    bool cw = delta > 0;
+    long n  = (delta > 0) ? delta : -delta;
+
+    digitalWrite(DIR_PIN, cw ? DIR_CW : DIR_CCW);
     delayMicroseconds(5);
-    unsigned int rampDelay = SMOOTH_START_DELAY_US;
 
-    while (mode == MODE_IDLE && Pot::isActive()) {
-      tick();
-      if (mode != MODE_IDLE || !Pot::isActive()) return;
-
-      // Mid-spin reversal: re-ramp from start so we don't slam the rotor.
-      bool curDir = Pot::isCW();
-      if (curDir != dirOnPin) {
-        dirOnPin = curDir;
-        digitalWrite(DIR_PIN, dirOnPin ? DIR_CW : DIR_CCW);
-        delayMicroseconds(5);
-        rampDelay = SMOOTH_START_DELAY_US;
-      }
-
-      // Honor the slower of (a) the user's pot target and (b) the ramp,
-      // so we never step faster than the ramp allows.
-      unsigned int target = Pot::speedDelayUs();
-      unsigned int d = (rampDelay > target) ? rampDelay : target;
-
+    for (long i = 0; i < n; i++) {
       digitalWrite(STEP_PIN, HIGH);
-      delayMicroseconds(d);
+      delayMicroseconds(POT_STEP_DELAY_US);
       digitalWrite(STEP_PIN, LOW);
-      delayMicroseconds(d);
+      delayMicroseconds(POT_STEP_DELAY_US);
 
-      if (rampDelay > target) {
-        unsigned int dec = SMOOTH_RAMP_STEP_US;
-        if (rampDelay - target < dec) rampDelay = target;
-        else rampDelay -= dec;
+      // Stay responsive to button/serial input mid-burst, but not on
+      // every step (the I2C/serial overhead would slow tracking).
+      if ((i & 7) == 0) {
+        tick();
+        if (mode != MODE_IDLE) return;
       }
     }
   }
@@ -154,6 +145,10 @@ void Motor::begin() {
 }
 
 void Motor::setMode(Mode m) {
+  // When entering IDLE from another mode, re-zero the pot's reference
+  // so the motor doesn't immediately jump to "catch up" with any pot
+  // movement that happened while we were in DANCE/SMOOTH.
+  if (mode != MODE_IDLE && m == MODE_IDLE) Pot::resync();
   mode = m;
   if (m == MODE_SMOOTH) smoothTargetDelay = SMOOTH_DEFAULT_DELAY_US;
 }

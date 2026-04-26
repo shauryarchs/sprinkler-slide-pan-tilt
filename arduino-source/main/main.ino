@@ -13,9 +13,11 @@
 //   D6 (red)   -> stop
 //   Wired button-to-GND, internal INPUT_PULLUP enabled.
 //
-// Potentiometer (live only when motor is IDLE; ~5 % deadband around center):
+// Potentiometer (live only when motor is IDLE):
 //   Wiper -> A0   Outer legs -> 5V and GND
-//   Deflect right of center = CW, left = CCW; magnitude sets speed.
+//   Acts as a position encoder: 1° of pot rotation = 1° of motor rotation.
+//   Turn the knob -> motor follows; stop turning -> motor stops. Direction
+//   matches knob direction (swap the 5V/GND outer legs to invert).
 //
 // Wiring (Arduino Uno):
 //   A4988 STEP -> D3   A4988 DIR  -> D2   (motor power separate on VMOT/GND)

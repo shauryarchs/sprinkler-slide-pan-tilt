@@ -56,60 +56,62 @@ void Display::showBanner() {
 }
 
 void Display::update(Mode mode, unsigned int smoothDelay, bool cw) {
-  // When idle and the pot is deflected, render as a "POT" screen with the
-  // pot's live direction and speed; otherwise show whatever the caller passed.
-  bool potDriving = (mode == MODE_IDLE) && Pot::isActive();
-  unsigned int delayShown = potDriving ? Pot::speedDelayUs() : smoothDelay;
-  bool cwShown            = potDriving ? Pot::isCW()         : cw;
+  // The pot is a position encoder when motor is IDLE; "active" means the
+  // user has turned it within ACTIVE_TIMEOUT_MS, regardless of position.
+  bool potActive = (mode == MODE_IDLE) && Pot::isActive();
 
-  if (mode == lastMode && delayShown == lastDelay && cwShown == lastCW
-      && potDriving == lastPotDriving) return;
+  if (mode == lastMode && smoothDelay == lastDelay && cw == lastCW
+      && potActive == lastPotDriving) return;
 
-  // Throttle redraws to avoid saturating I2C while the pot is being
-  // continuously turned (mode/direction changes still bypass the throttle).
-  bool stateChanged = (mode != lastMode) || (cwShown != lastCW)
-                      || (potDriving != lastPotDriving);
+  // Throttle redraws to keep I2C from saturating during rapid state
+  // updates; mode/direction changes bypass the throttle so they're snappy.
+  bool stateChanged = (mode != lastMode) || (cw != lastCW)
+                      || (potActive != lastPotDriving);
   unsigned long now = millis();
   if (!stateChanged && (now - lastDrawMs) < DRAW_THROTTLE_MS) return;
 
-  lastMode        = mode;
-  lastDelay       = delayShown;
-  lastCW          = cwShown;
-  lastPotDriving  = potDriving;
-  lastDrawMs      = now;
+  lastMode       = mode;
+  lastDelay      = smoothDelay;
+  lastCW         = cw;
+  lastPotDriving = potActive;
+  lastDrawMs     = now;
 
   oled.clearDisplay();
   oled.setTextColor(SSD1306_WHITE);
 
   oled.setTextSize(2);
   oled.setCursor(0, 0);
-  oled.print(modeName(mode, potDriving));
+  oled.print(modeName(mode, potActive));
 
-  bool showSpeedUI = (mode == MODE_SMOOTH) || potDriving;
-  if (showSpeedUI) {
+  if (mode == MODE_SMOOTH) {
     oled.setTextSize(1);
     oled.setCursor(80, 4);
-    oled.print(cwShown ? F("CW") : F("CCW"));
+    oled.print(cw ? F("CW") : F("CCW"));
 
     oled.setCursor(0, 24);
     oled.print(F("delay: "));
-    oled.print(delayShown);
+    oled.print(smoothDelay);
     oled.println(F(" us"));
 
     // Speed bar — shorter delay = longer bar.
     const long MIN_D = 150;
     const long MAX_D = 2000;
-    long w = (long)(MAX_D - (long)delayShown) * 128 / (MAX_D - MIN_D);
+    long w = (long)(MAX_D - (long)smoothDelay) * 128 / (MAX_D - MIN_D);
     if (w < 0) w = 0;
     if (w > 128) w = 128;
     oled.fillRect(0, 40, w, 8, SSD1306_WHITE);
     oled.drawRect(0, 40, 128, 8, SSD1306_WHITE);
+  } else if (potActive) {
+    oled.setTextSize(1);
+    oled.setCursor(0, 24);
+    oled.println(F("synced to knob"));
   } else if (mode == MODE_IDLE) {
     oled.setTextSize(1);
     oled.setCursor(0, 24);
-    oled.println(F("d=dance"));
-    oled.setCursor(0, 36);
-    oled.println(F("r=run smooth"));
+    oled.println(F("   / \\_/ \\"));
+    oled.println(F("  (  o.o  )"));
+    oled.println(F("   >  ^  <"));
+    oled.println(F("    DOGGY"));
   }
 
   oled.display();

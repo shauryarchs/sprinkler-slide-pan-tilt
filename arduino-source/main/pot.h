@@ -3,10 +3,7 @@
 
 namespace Pot {
   void begin();
-
-  // Cached internally (~5 ms TTL) so callers in the same tick don't
-  // each pay the ~100 us cost of analogRead.
-  bool isActive();              // |position - center| > deadband
-  bool isCW();                  // true if pot deflected toward CW side
-  unsigned int speedDelayUs();  // step half-period, smaller = faster
+  void resync();        // re-zero internal reference to current pot reading
+  long pollDelta();     // signed motor-step delta since last call (CW = positive)
+  bool isActive();      // true if pollDelta() returned non-zero recently
 }
