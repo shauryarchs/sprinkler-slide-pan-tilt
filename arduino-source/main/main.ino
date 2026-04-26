@@ -40,7 +40,7 @@ void pollSerial() {
     case 'f': case 'F':
       Motor::faster(); break;
     case 's': case 'S':
-      Motor::setMode(MODE_IDLE);    Serial.println(F("stopped")); break;
+      Motor::stopPressed();         Serial.println(F("stopped")); break;
   }
 }
 
@@ -51,7 +51,7 @@ void pollButtons() {
     case Buttons::EVENT_RIGHT:
       Motor::startSmooth(true);     Serial.println(F("btn: CW"));  break;
     case Buttons::EVENT_STOP:
-      Motor::setMode(MODE_IDLE);    Serial.println(F("btn: stop")); break;
+      Motor::stopPressed();         Serial.println(F("btn: stop")); break;
     case Buttons::EVENT_NONE:
       break;
   }

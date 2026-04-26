@@ -51,12 +51,12 @@ namespace {
     }
   }
 
-  const __FlashStringHelper* modeName(Mode m, bool potDriving) {
+  const __FlashStringHelper* modeName(Mode m, bool potDriving, bool potOff) {
     if (potDriving) return F("POT");
     switch (m) {
       case MODE_DANCE:  return F("DANCE");
       case MODE_SMOOTH: return F("SMOOTH");
-      case MODE_IDLE:   return F("THEO");
+      case MODE_IDLE:   return potOff ? F("STOP") : F("THEO");
     }
     return F("?");
   }
@@ -87,8 +87,10 @@ void Display::showBanner() {
 
 void Display::update(Mode mode, unsigned int smoothDelay, bool cw) {
   // Pot is a position encoder when motor is IDLE; "active" = user has
-  // turned it within ACTIVE_TIMEOUT_MS regardless of position.
-  bool potActive = (mode == MODE_IDLE) && Pot::isActive();
+  // turned it within ACTIVE_TIMEOUT_MS regardless of position. The STOP
+  // latch (Motor::isPotDisabled) suppresses pot tracking entirely.
+  bool potOff    = Motor::isPotDisabled();
+  bool potActive = (mode == MODE_IDLE) && !potOff && Pot::isActive();
   // Animate the running dog whenever the motor is rotating: continuous
   // smooth, dance routine, or pot-driven manual positioning.
   bool animating = (mode == MODE_SMOOTH) || (mode == MODE_DANCE) || potActive;
@@ -117,7 +119,7 @@ void Display::update(Mode mode, unsigned int smoothDelay, bool cw) {
 
   oled.setTextSize(2);
   oled.setCursor(0, 0);
-  oled.print(modeName(mode, potActive));
+  oled.print(modeName(mode, potActive, potOff));
 
   // Direction badge in the top-right corner — only meaningful for SMOOTH.
   if (mode == MODE_SMOOTH) {

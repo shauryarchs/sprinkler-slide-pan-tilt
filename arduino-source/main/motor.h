@@ -12,6 +12,12 @@ namespace Motor {
   void faster();              // halve smooth-mode delay (doubles speed)
   void startSmooth(bool cw);  // enter smooth mode in the given direction
   bool isSmoothCW();
+
+  // Red STOP button. Halts whatever's running and latches the pot off so
+  // it cannot restart the motor on its own. Pressing STOP again while
+  // already idle toggles the pot back on.
+  void stopPressed();
+  bool isPotDisabled();
 }
 
 // Defined in main.ino. Called between motor pulses so the rest of the

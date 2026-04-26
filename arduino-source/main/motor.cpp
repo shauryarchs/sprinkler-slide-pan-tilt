@@ -15,6 +15,7 @@ namespace {
   Mode mode = MODE_IDLE;
   unsigned int smoothTargetDelay = SMOOTH_DEFAULT_DELAY_US;
   bool smoothCW = true;
+  bool potDisabled = false;   // STOP latches this; CW/CCW clears it.
 
   struct Move {
     bool clockwise;
@@ -82,13 +83,13 @@ namespace {
   const long POT_BATCH = 8;
 
   void runPot() {
-    // Active only when mode == MODE_IDLE. We process the pot in small
-    // batches and re-poll between them. The instant the pot stops moving,
-    // pollDelta() returns 0 and we exit — the motor stops rather than
-    // running off any backlog. Side effect: a very fast knob sweep can
-    // leave the motor a few steps behind where the pot ended up, since
-    // we explicitly do NOT chase the residual after the pot stops.
-    while (mode == MODE_IDLE) {
+    // Active only when mode == MODE_IDLE AND the pot hasn't been latched
+    // off by a STOP press. We process the pot in small batches and re-poll
+    // between them; the instant the pot stops moving (or the STOP latch
+    // fires), pollDelta() returns 0 and we exit — the motor stops rather
+    // than running off any backlog.
+    if (potDisabled) return;
+    while (mode == MODE_IDLE && !potDisabled) {
       long delta = Pot::pollDelta();
       if (delta == 0) return;
 
@@ -107,7 +108,7 @@ namespace {
       }
 
       tick();
-      if (mode != MODE_IDLE) return;
+      if (mode != MODE_IDLE || potDisabled) return;
     }
   }
 
@@ -170,7 +171,20 @@ void Motor::startSmooth(bool cw) {
   if (mode != MODE_SMOOTH) smoothTargetDelay = SMOOTH_DEFAULT_DELAY_US;
   smoothCW = cw;
   mode = MODE_SMOOTH;
+  potDisabled = false;        // explicit start clears the STOP latch
 }
+
+void Motor::stopPressed() {
+  // STOP halts whatever's running. If we were already idle, treat the
+  // press as a toggle so the user can re-engage the pot without having
+  // to enter SMOOTH first.
+  bool wasIdle = (mode == MODE_IDLE);
+  if (!wasIdle) Pot::resync();
+  mode = MODE_IDLE;
+  potDisabled = wasIdle ? !potDisabled : true;
+}
+
+bool Motor::isPotDisabled() { return potDisabled; }
 
 void Motor::faster() {
   if (mode != MODE_SMOOTH) {
