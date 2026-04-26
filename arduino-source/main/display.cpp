@@ -81,7 +81,7 @@ void Display::update(Mode mode, unsigned int smoothDelay) {
     oled.setCursor(0, 24);
     oled.println(F("d=dance"));
     oled.setCursor(0, 36);
-    oled.println(F("r=smooth"));
+    oled.println(F("r=run smooth"));
   }
 
   oled.display();
