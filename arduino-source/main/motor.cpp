@@ -5,28 +5,30 @@ const int DIR_PIN  = 2;
 const int DIR_CW   = LOW;
 const int DIR_CCW  = HIGH;
 
-const unsigned int SMOOTH_DEFAULT_DELAY_US = 50;
-const unsigned int SMOOTH_START_DELAY_US   = 50;
-const unsigned int SMOOTH_RAMP_STEP_US     = 10;
-const unsigned int SMOOTH_MIN_DELAY_US     = 5;
+// Total step period in microseconds (half spent HIGH on STEP, half LOW).
+// At 1/32 microstepping (6400 µsteps per motor revolution) on a NEMA 17:
+//   1600 µs -> 625 steps/sec  -> ~5.9 RPM
+//    800 µs -> 1250 steps/sec -> ~11.7 RPM
+//    400 µs -> 2500 steps/sec -> ~23.4 RPM
+//    200 µs -> 5000 steps/sec -> ~46.9 RPM
+const unsigned int SMOOTH_INTERVAL_US     = 150;
+const unsigned int SMOOTH_MIN_INTERVAL_US = 150;
 
 namespace {
   Mode mode = MODE_IDLE;
-  unsigned int smoothTargetDelay = SMOOTH_DEFAULT_DELAY_US;
+  unsigned int smoothInterval = SMOOTH_INTERVAL_US;
   bool smoothCW = true;
 
-  // Pulses between tick() calls in smooth mode. tick() runs serial polling,
-  // button polling, and display refresh — all quick but variable. At a
-  // 100 us half-period that variability shows up as audible/visible step
-  // jitter. Batching to one tick per 16 pulses keeps cadence uniform while
-  // staying well inside the 30 ms button debounce window.
+  // Pulses between tick() calls. Tick polls serial, buttons, and the OLED
+  // — variable-time work that adds jitter to every step if done too often.
+  // Batching keeps step cadence even while staying inside the 30 ms button
+  // debounce window.
   const int SMOOTH_TICK_EVERY = 16;
 
   void runSmooth() {
-    bool dirOnPin = smoothCW;
-    digitalWrite(DIR_PIN, dirOnPin ? DIR_CW : DIR_CCW);
+    digitalWrite(DIR_PIN, smoothCW ? DIR_CW : DIR_CCW);
     delayMicroseconds(5);
-    unsigned int stepDelay = SMOOTH_START_DELAY_US;
+    bool dirOnPin = smoothCW;
     int sinceTick = SMOOTH_TICK_EVERY;   // tick on first iteration
 
     while (mode == MODE_SMOOTH) {
@@ -35,26 +37,18 @@ namespace {
         tick();
         if (mode != MODE_SMOOTH) return;
 
-        // Direction reversed mid-spin: re-ramp from start so we don't lose
-        // steps slamming the rotor into the opposite direction at full speed.
+        // Direction reversed mid-spin: re-set DIR pin and keep going.
         if (smoothCW != dirOnPin) {
           dirOnPin = smoothCW;
           digitalWrite(DIR_PIN, dirOnPin ? DIR_CW : DIR_CCW);
           delayMicroseconds(5);
-          stepDelay = SMOOTH_START_DELAY_US;
         }
       }
 
       digitalWrite(STEP_PIN, HIGH);
-      delayMicroseconds(stepDelay);
+      delayMicroseconds(smoothInterval / 2);
       digitalWrite(STEP_PIN, LOW);
-      delayMicroseconds(stepDelay);
-
-      if (stepDelay > smoothTargetDelay) {
-        unsigned int dec = SMOOTH_RAMP_STEP_US;
-        if (stepDelay - smoothTargetDelay < dec) stepDelay = smoothTargetDelay;
-        else stepDelay -= dec;
-      }
+      delayMicroseconds(smoothInterval / 2);
     }
   }
 }
@@ -64,21 +58,20 @@ void Motor::begin() {
   pinMode(DIR_PIN, OUTPUT);
 }
 
-void Motor::setMode(Mode m) {
-  mode = m;
-  if (m == MODE_SMOOTH) smoothTargetDelay = SMOOTH_DEFAULT_DELAY_US;
+void Motor::update() {
+  if (mode == MODE_SMOOTH) runSmooth();
 }
 
 Mode Motor::getMode() { return mode; }
 
-unsigned int Motor::getSmoothDelay() { return smoothTargetDelay; }
+unsigned int Motor::getSmoothDelay() { return smoothInterval; }
 
 bool Motor::isSmoothCW() { return smoothCW; }
 
 void Motor::startSmooth(bool cw) {
-  // Only reset target speed when entering smooth from another mode; a
-  // direction flip while already smooth keeps the user's chosen speed.
-  if (mode != MODE_SMOOTH) smoothTargetDelay = SMOOTH_DEFAULT_DELAY_US;
+  // Reset to default speed when entering from idle; a direction flip while
+  // already running keeps whatever speed the user set with 'f'.
+  if (mode != MODE_SMOOTH) smoothInterval = SMOOTH_INTERVAL_US;
   smoothCW = cw;
   mode = MODE_SMOOTH;
 }
@@ -92,14 +85,10 @@ void Motor::faster() {
     Serial.println(F("(press 'r' first - 'f' only works in smooth mode)"));
     return;
   }
-  unsigned int next = smoothTargetDelay / 2;
-  if (next < SMOOTH_MIN_DELAY_US) next = SMOOTH_MIN_DELAY_US;
-  smoothTargetDelay = next;
-  Serial.print(F("faster, half-period now "));
-  Serial.print(smoothTargetDelay);
+  unsigned int next = smoothInterval / 2;
+  if (next < SMOOTH_MIN_INTERVAL_US) next = SMOOTH_MIN_INTERVAL_US;
+  smoothInterval = next;
+  Serial.print(F("faster, interval now "));
+  Serial.print(smoothInterval);
   Serial.println(F(" us"));
-}
-
-void Motor::update() {
-  if (mode == MODE_SMOOTH) runSmooth();
 }
