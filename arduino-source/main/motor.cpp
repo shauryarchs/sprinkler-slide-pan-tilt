@@ -6,6 +6,9 @@ const int DIR_CW   = LOW;
 const int DIR_CCW  = HIGH;
 
 // Total step period in microseconds (half spent HIGH on STEP, half LOW).
+// SMOOTH_INTERVAL_US is the SLOW end of the speed range (light joystick
+// deflection); SMOOTH_MIN_INTERVAL_US is the FAST end (full deflection).
+// Buttons / 'r' command also start at SMOOTH_INTERVAL_US.
 // At 1/32 microstepping (6400 µsteps per motor revolution) on a NEMA 17:
 //   1600 µs -> 625 steps/sec  -> ~5.9 RPM
 //    800 µs -> 1250 steps/sec -> ~11.7 RPM
@@ -91,4 +94,12 @@ void Motor::faster() {
   Serial.print(F("faster, interval now "));
   Serial.print(smoothInterval);
   Serial.println(F(" us"));
+}
+
+void Motor::setSpeedFraction(float f) {
+  if (f < 0.0) f = 0.0;
+  if (f > 1.0) f = 1.0;
+  // f=0 -> SMOOTH_INTERVAL_US (slowest), f=1 -> SMOOTH_MIN_INTERVAL_US (fastest).
+  unsigned int range = SMOOTH_INTERVAL_US - SMOOTH_MIN_INTERVAL_US;
+  smoothInterval = SMOOTH_INTERVAL_US - (unsigned int)(f * range);
 }
