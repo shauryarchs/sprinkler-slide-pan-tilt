@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
 
-enum Mode { MODE_IDLE, MODE_DANCE, MODE_SMOOTH };
+enum Mode { MODE_IDLE, MODE_SMOOTH };
 
 namespace Motor {
   void begin();
@@ -13,11 +13,8 @@ namespace Motor {
   void startSmooth(bool cw);  // enter smooth mode in the given direction
   bool isSmoothCW();
 
-  // Red STOP button. Halts whatever's running and latches the pot off so
-  // it cannot restart the motor on its own. Pressing STOP again while
-  // already idle toggles the pot back on.
+  // Red STOP button. Halts whatever's running.
   void stopPressed();
-  bool isPotDisabled();
 }
 
 // Defined in main.ino. Called between motor pulses so the rest of the

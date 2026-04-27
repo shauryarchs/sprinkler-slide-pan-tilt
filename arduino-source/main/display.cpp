@@ -1,5 +1,4 @@
 #include "display.h"
-#include "pot.h"
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -17,7 +16,6 @@ namespace {
   Mode lastMode = (Mode)-1;
   unsigned int lastDelay = 0;
   bool lastCW = true;
-  bool lastPotDriving = false;
   int  lastFrame = -1;
   unsigned long lastDrawMs = 0;
   const unsigned long DRAW_THROTTLE_MS = 100;
@@ -51,12 +49,10 @@ namespace {
     }
   }
 
-  const __FlashStringHelper* modeName(Mode m, bool potDriving, bool potOff) {
-    if (potDriving) return F("POT");
+  const __FlashStringHelper* modeName(Mode m) {
     switch (m) {
-      case MODE_DANCE:  return F("DANCE");
       case MODE_SMOOTH: return F("SMOOTH");
-      case MODE_IDLE:   return potOff ? F("STOP") : F("THEO");
+      case MODE_IDLE:   return F("THEO");
     }
     return F("?");
   }
@@ -78,48 +74,39 @@ void Display::showBanner() {
   oled.println(F("Stepper"));
   oled.setTextSize(1);
   oled.setCursor(0, 24);
-  oled.println(F("d=dance  r=smooth"));
+  oled.println(F("r=smooth s=stop"));
   oled.setCursor(0, 36);
-  oled.println(F("f=faster s=stop"));
+  oled.println(F("f=faster"));
   oled.display();
   delay(1500);
 }
 
 void Display::update(Mode mode, unsigned int smoothDelay, bool cw) {
-  // Pot is a position encoder when motor is IDLE; "active" = user has
-  // turned it within ACTIVE_TIMEOUT_MS regardless of position. The STOP
-  // latch (Motor::isPotDisabled) suppresses pot tracking entirely.
-  bool potOff    = Motor::isPotDisabled();
-  bool potActive = (mode == MODE_IDLE) && !potOff && Pot::isActive();
-  // Animate the running dog whenever the motor is rotating: continuous
-  // smooth, dance routine, or pot-driven manual positioning.
-  bool animating = (mode == MODE_SMOOTH) || (mode == MODE_DANCE) || potActive;
+  bool animating = (mode == MODE_SMOOTH);
   int  frame     = animating ? (int)((millis() / FRAME_MS) & 3) : 0;
 
   if (mode == lastMode && smoothDelay == lastDelay && cw == lastCW
-      && potActive == lastPotDriving && frame == lastFrame) return;
+      && frame == lastFrame) return;
 
   // Throttle redraws so I2C doesn't saturate; state and animation-frame
   // changes both bypass the throttle so the dog keeps stepping in time.
-  bool stateChanged = (mode != lastMode) || (cw != lastCW)
-                      || (potActive != lastPotDriving);
+  bool stateChanged = (mode != lastMode) || (cw != lastCW);
   bool frameChanged = (frame != lastFrame);
   unsigned long now = millis();
   if (!stateChanged && !frameChanged && (now - lastDrawMs) < DRAW_THROTTLE_MS) return;
 
-  lastMode       = mode;
-  lastDelay      = smoothDelay;
-  lastCW         = cw;
-  lastPotDriving = potActive;
-  lastFrame      = frame;
-  lastDrawMs     = now;
+  lastMode   = mode;
+  lastDelay  = smoothDelay;
+  lastCW     = cw;
+  lastFrame  = frame;
+  lastDrawMs = now;
 
   oled.clearDisplay();
   oled.setTextColor(SSD1306_WHITE);
 
   oled.setTextSize(2);
   oled.setCursor(0, 0);
-  oled.print(modeName(mode, potActive, potOff));
+  oled.print(modeName(mode));
 
   // Direction badge in the top-right corner — only meaningful for SMOOTH.
   if (mode == MODE_SMOOTH) {
