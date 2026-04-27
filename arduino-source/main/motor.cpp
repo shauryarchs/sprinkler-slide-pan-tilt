@@ -14,8 +14,8 @@ const int DIR_CCW  = HIGH;
 //    800 µs -> 1250 steps/sec -> ~11.7 RPM
 //    400 µs -> 2500 steps/sec -> ~23.4 RPM
 //    200 µs -> 5000 steps/sec -> ~46.9 RPM
-const unsigned int SMOOTH_INTERVAL_US     = 150;
-const unsigned int SMOOTH_MIN_INTERVAL_US = 150;
+const unsigned int SMOOTH_INTERVAL_US     = 750;
+const unsigned int SMOOTH_MIN_INTERVAL_US = 750;
 
 namespace {
   Mode mode = MODE_IDLE;
@@ -26,11 +26,11 @@ namespace {
   // — variable-time work that adds jitter to every step if done too often.
   // Batching keeps step cadence even while staying inside the 30 ms button
   // debounce window.
-  const int SMOOTH_TICK_EVERY = 16;
+  const int SMOOTH_TICK_EVERY = 1;
 
   void runSmooth() {
     digitalWrite(DIR_PIN, smoothCW ? DIR_CW : DIR_CCW);
-    delayMicroseconds(5);
+    delayMicroseconds(1);
     bool dirOnPin = smoothCW;
     int sinceTick = SMOOTH_TICK_EVERY;   // tick on first iteration
 
