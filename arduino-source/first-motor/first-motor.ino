@@ -8,8 +8,8 @@
 const int LED_PIN = 11;
 const int BUTTON_PIN = 10;
 const int POT_PIN = A0;
-const int DIR_PIN = 2;
-const int STEP_PIN = 3;
+const int DIR_PIN = 6;
+const int STEP_PIN = 7;
 const int LIMIT_PIN = 4;
 
 const int MIN_BRIGHTNESS = 15;
