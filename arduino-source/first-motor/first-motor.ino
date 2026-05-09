@@ -12,10 +12,6 @@ const int DIR_PIN = 6;
 const int STEP_PIN = 7;
 const int LIMIT_PIN = 4;
 
-// Motor 2 (pan oscillator) — sweeps between 0° and 180°, paused by the same D10 button.
-const int M2_DIR_PIN = 8;
-const int M2_STEP_PIN = 9;
-
 const int MIN_BRIGHTNESS = 15;
 const int MAX_BRIGHTNESS = 255;
 const int POT_MAX_ANGLE = 270;
@@ -41,14 +37,6 @@ const unsigned long STEP_INTERVAL_MIN_US = 150;
 const unsigned long STEP_INTERVAL_MAX_US = 6000;
 const unsigned long RAMP_US_PER_MS = 60;
 const unsigned long HOMING_STEP_INTERVAL_US = 200;
-
-// Motor 2 microstep config: 200 full-steps/rev * 16 microsteps = 3200 steps/rev.
-// At STEP_INTERVAL_US = 3022, a 180° sweep takes ~4.8 s.
-const long M2_STEPS_PER_REV = 3200;
-const long M2_POS_0_DEG = 0;
-const long M2_POS_180_DEG = M2_STEPS_PER_REV / 2;
-const unsigned long M2_STEP_INTERVAL_US = 3022;
-const bool M2_CLOCKWISE_IS_HIGH = false;
 
 const int DIR_CW = LOW;
 const int DIR_CCW = HIGH;
@@ -80,10 +68,6 @@ unsigned long lastRampMs = 0;
 // direction to the bounce sequence (overriding pot direction) until the
 // motor stops (pot enters deadband).
 bool autoReverse = false;
-
-long m2CurrentSteps = 0;
-long m2TargetSteps = M2_POS_180_DEG;
-unsigned long m2LastStepMicros = 0;
 
 const int POT_SAMPLES = 8;
 int potBuffer[POT_SAMPLES] = {0};
@@ -268,29 +252,6 @@ void updateStepper(int potAngle) {
   stepperEnabled = true;
 }
 
-void updateMotor2() {
-  if (motorPaused) return;
-
-  if (m2CurrentSteps == m2TargetSteps) {
-    m2TargetSteps = (m2TargetSteps == M2_POS_0_DEG) ? M2_POS_180_DEG : M2_POS_0_DEG;
-  }
-
-  unsigned long now = micros();
-  if (now - m2LastStepMicros < M2_STEP_INTERVAL_US) return;
-  m2LastStepMicros = now;
-
-  bool forward = m2TargetSteps > m2CurrentSteps;
-  bool dirHigh = forward ? M2_CLOCKWISE_IS_HIGH : !M2_CLOCKWISE_IS_HIGH;
-  digitalWrite(M2_DIR_PIN, dirHigh ? HIGH : LOW);
-  delayMicroseconds(2);
-
-  digitalWrite(M2_STEP_PIN, HIGH);
-  delayMicroseconds(2);
-  digitalWrite(M2_STEP_PIN, LOW);
-
-  m2CurrentSteps += forward ? 1 : -1;
-}
-
 void updateDisplay(int angle, long posMm) {
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
@@ -328,10 +289,7 @@ void setup() {
   pinMode(DIR_PIN, OUTPUT);
   pinMode(STEP_PIN, OUTPUT);
   pinMode(LIMIT_PIN, INPUT_PULLUP);
-  pinMode(M2_DIR_PIN, OUTPUT);
-  pinMode(M2_STEP_PIN, OUTPUT);
   digitalWrite(STEP_PIN, LOW);
-  digitalWrite(M2_STEP_PIN, LOW);
   analogWrite(LED_PIN, MAX_BRIGHTNESS);
 
   Wire.begin();
@@ -375,7 +333,6 @@ void loop() {
   int potAngle = map(potValue, 0, 1023, 0, POT_MAX_ANGLE);
 
   updateStepper(potAngle);
-  updateMotor2();
 
   // LED brightness scales with step rate: fast → bright, slow → dim, stopped → off.
   if (stepperEnabled) {
