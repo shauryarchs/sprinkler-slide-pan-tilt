@@ -14,8 +14,8 @@ const int DIR_CCW  = HIGH;
 //    800 µs -> 1250 steps/sec -> ~11.7 RPM
 //    400 µs -> 2500 steps/sec -> ~23.4 RPM
 //    200 µs -> 5000 steps/sec -> ~46.9 RPM
-const unsigned int SMOOTH_INTERVAL_US     = 750;
-const unsigned int SMOOTH_MIN_INTERVAL_US = 750;
+const unsigned int SMOOTH_INTERVAL_US     = 50;
+const unsigned int SMOOTH_MIN_INTERVAL_US = 50;
 
 namespace {
   Mode mode = MODE_IDLE;
