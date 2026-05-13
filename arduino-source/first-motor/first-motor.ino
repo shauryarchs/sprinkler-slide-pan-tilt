@@ -1,39 +1,38 @@
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <util/atomic.h>
 
-// LED moved to D11 (Timer2 PWM). Timer1 is reserved for the step ISR — D9/D10 PWM
-// will not work while this sketch runs.
-const int LED_PIN = 11;
-const int BUTTON_PIN = 10;
-const int POT_PIN = A0;
-const int DIR_PIN = 6;
-const int STEP_PIN = 7;
-const int LIMIT_PIN = 4;
+// Pins use Arduino Nano ESP32 silkscreen labels (D4/D6/D7/D10/D11/A0). The
+// core resolves them to the right ESP32-S3 GPIOs, so wiring is identical to
+// the original Uno pinout. Targets arduino-esp32 core 2.x (Nano ESP32's
+// bundled package); uses the legacy timerBegin/timerAlarmWrite API.
+const int LED_PIN = D11;       // GPIO 38
+const int BUTTON_PIN = D10;    // GPIO 21
+const int POT_PIN = A0;        // GPIO 1  (ADC1_CH0)
+const int DIR_PIN = D6;        // GPIO 9
+const int STEP_PIN = D7;       // GPIO 10
+const int LIMIT_PIN = D4;      // GPIO 7
 
 const int MIN_BRIGHTNESS = 15;
 const int MAX_BRIGHTNESS = 255;
 const int POT_MAX_ANGLE = 270;
-// Asymmetric deadband: stopped between POT_STOP_LOW and POT_STOP_HIGH.
-// Below POT_STOP_LOW → CCW. Above POT_STOP_HIGH → CW.
-const int POT_STOP_LOW = 120;
-const int POT_STOP_HIGH = 142;
-// Speed scaling: pot deflection past either deadband edge maps linearly to
-// the step interval. Capped at the smaller of the two available ranges
-// (POT_STOP_LOW = 120° on the CCW side) so max CCW speed == max CW speed.
-const int POT_MAX_MAGNITUDE = 120;
+// Symmetric deadband: stopped between POT_STOP_LOW and POT_STOP_HIGH.
+// Below POT_STOP_LOW → CCW (max speed at 0°). Above POT_STOP_HIGH → CW
+// (max speed at 270°). Both sides have 130° of usable travel.
+const int POT_STOP_LOW = 130;
+const int POT_STOP_HIGH = 140;
+const int POT_MAX_MAGNITUDE = 130;
 
 // 200 full-steps/rev * 32 microsteps (MS1=VDD, MS2=GND) = 6400 steps/rev.
 // 160 steps/mm assumes GT2 belt + 20T pulley (40 mm/rev).
 const long STEPS_PER_MM = 160;
 // Auto-reverse points (carriage bounces between these in normal operation).
-const long MAX_POSITION_MM = 500;
+const long MAX_POSITION_MM = 1000;
 const long MIN_POSITION_MM = 5;
 const long MAX_POSITION_STEPS = MAX_POSITION_MM * STEPS_PER_MM;
 const long MIN_POSITION_STEPS = MIN_POSITION_MM * STEPS_PER_MM;
 
-const unsigned long STEP_INTERVAL_MIN_US = 150;
+const unsigned long STEP_INTERVAL_MIN_US = 120;
 const unsigned long STEP_INTERVAL_MAX_US = 6000;
 const unsigned long RAMP_US_PER_MS = 60;
 const unsigned long HOMING_STEP_INTERVAL_US = 200;
@@ -69,11 +68,14 @@ unsigned long lastRampMs = 0;
 // motor stops (pot enters deadband).
 bool autoReverse = false;
 
-const int POT_SAMPLES = 8;
+const int POT_SAMPLES = 16;
 int potBuffer[POT_SAMPLES] = {0};
 int potIndex = 0;
 long potSum = 0;
 bool potBufferFilled = false;
+
+portMUX_TYPE stepperMux = portMUX_INITIALIZER_UNLOCKED;
+hw_timer_t *stepperTimer = NULL;
 
 int readPotSmoothed() {
   potSum -= potBuffer[potIndex];
@@ -85,7 +87,10 @@ int readPotSmoothed() {
   return potSum / divisor;
 }
 
-ISR(TIMER1_COMPA_vect) {
+// arduino-esp32 v2.x marks digitalWrite/digitalRead as IRAM_ATTR, so they're
+// safe to call from this timer ISR. Matches the homing pulse, which is known
+// to work end-to-end (driver receives the steps).
+void IRAM_ATTR onStepperTimer() {
   if (!stepperEnabled) return;
   // Hard edge stops: refuse any step that would push past either limit,
   // regardless of loop latency or decel ramp.
@@ -93,47 +98,44 @@ ISR(TIMER1_COMPA_vect) {
     stepperEnabled = false;
     return;
   }
-  if (stepperDir == DIR_CCW &&
-      (stepperPosition <= MIN_POSITION_STEPS || digitalRead(LIMIT_PIN) == LOW)) {
+  if (stepperDir == DIR_CCW && stepperPosition <= MIN_POSITION_STEPS) {
     stepperEnabled = false;
     return;
   }
   digitalWrite(STEP_PIN, HIGH);
+  delayMicroseconds(2);
   digitalWrite(STEP_PIN, LOW);
   if (stepperDir == DIR_CW) stepperPosition++;
   else stepperPosition--;
 }
 
 void setStepperInterval(unsigned long us) {
-  // Timer1 prescaler 8 → 0.5 µs/tick. OCR1A counts ticks - 1.
-  uint32_t ticks = us * 2;
-  if (ticks > 65535) ticks = 65535;
-  if (ticks < 20) ticks = 20;
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
-    OCR1A = (uint16_t)(ticks - 1);
-  }
+  if (us < 10) us = 10;
+  if (stepperTimer == NULL) return;
+  // Timer ticks at 1 MHz, so the alarm value is the period in microseconds.
+  timerAlarmWrite(stepperTimer, us, true);
 }
 
-void setupTimer1() {
-  noInterrupts();
-  TCCR1A = 0;
-  TCCR1B = 0;
-  TCNT1 = 0;
-  OCR1A = 65535;
-  TCCR1B |= (1 << WGM12);
-  TCCR1B |= (1 << CS11);
-  TIMSK1 |= (1 << OCIE1A);
-  interrupts();
+void setupStepperTimer() {
+  // Timer 0, prescaler 80 → 80 MHz APB / 80 = 1 MHz tick (1 µs).
+  stepperTimer = timerBegin(0, 80, true);
+  timerAttachInterrupt(stepperTimer, &onStepperTimer, true);
+  timerAlarmWrite(stepperTimer, STEP_INTERVAL_MAX_US, true);
+  timerAlarmEnable(stepperTimer);
 }
 
 long getStepperPosition() {
   long pos;
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { pos = stepperPosition; }
+  portENTER_CRITICAL(&stepperMux);
+  pos = stepperPosition;
+  portEXIT_CRITICAL(&stepperMux);
   return pos;
 }
 
 void setStepperPosition(long pos) {
-  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) { stepperPosition = pos; }
+  portENTER_CRITICAL(&stepperMux);
+  stepperPosition = pos;
+  portEXIT_CRITICAL(&stepperMux);
 }
 
 void stepHomingPulse() {
@@ -191,7 +193,19 @@ void updateStepper(int potAngle) {
   if (motorPaused) requestStop = true;
 
   long pos = getStepperPosition();
-  bool limitHit = (digitalRead(LIMIT_PIN) == LOW);
+  // Debounce + position guard: the limit switch's only job after homing is
+  // to recover from drift if the carriage actually arrives near home. Out in
+  // the middle of the rail, a LOW reading is noise and must be ignored.
+  static int limitConsecutiveLow = 0;
+  const int LIMIT_DEBOUNCE = 5;
+  const long LIMIT_TRUST_THRESHOLD = MIN_POSITION_STEPS + 200;
+  if (digitalRead(LIMIT_PIN) == LOW) {
+    if (limitConsecutiveLow < LIMIT_DEBOUNCE) limitConsecutiveLow++;
+  } else {
+    limitConsecutiveLow = 0;
+  }
+  bool limitHit = (limitConsecutiveLow >= LIMIT_DEBOUNCE) &&
+                  (pos < LIMIT_TRUST_THRESHOLD);
   if (limitHit) {
     setStepperPosition(0);
     pos = 0;
@@ -290,6 +304,8 @@ void setup() {
   pinMode(STEP_PIN, OUTPUT);
   pinMode(LIMIT_PIN, INPUT_PULLUP);
   digitalWrite(STEP_PIN, LOW);
+  // Match AVR's 10-bit ADC so the existing 0-1023 → angle map is unchanged.
+  analogReadResolution(10);
   analogWrite(LED_PIN, MAX_BRIGHTNESS);
 
   Wire.begin();
@@ -314,7 +330,7 @@ void setup() {
   display.display();
 
   homeStepper();
-  setupTimer1();
+  setupStepperTimer();
   lastRampMs = millis();
 }
 
