@@ -5,7 +5,7 @@
 #include "LimitSwitch.h"
 #include "Stepper.h"
 
-// Pin assignments use Arduino Nano ESP32 silkscreen labels (D3/D4/D5/D6/D7/D10).
+// Pin assignments use Arduino Nano ESP32 silkscreen labels (D3/D4/D5/D6/D7/D12).
 // The core resolves them to the right ESP32-S3 GPIOs.
 namespace pins {
 const int kEncoderSw = D3;
@@ -13,7 +13,7 @@ const int kEncoderDt = D4;
 const int kEncoderClk = D5;
 const int kStepperDir = D6;
 const int kStepperStep = D7;
-const int kLimit = D10;
+const int kLimit = D12;
 }  // namespace pins
 
 // display.display() blocks ~30 ms on I2C; refreshing every 250 ms keeps
