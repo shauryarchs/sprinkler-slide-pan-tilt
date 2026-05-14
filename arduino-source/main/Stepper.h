@@ -58,6 +58,9 @@ class Stepper {
   void begin();
   void home(LimitSwitch& limit);
   void update(int dial, LimitSwitch& limit);
+  // Disable the ISR-driven step output. Used when control of this
+  // motor is handed off (e.g. switching to the menu or to motor2).
+  void stop();
 
   long positionSteps() const { return position_; }
   long positionMm() const;

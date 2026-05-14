@@ -13,7 +13,8 @@ Encoder::Encoder(int swPin, int dtPin, int clkPin)
       lastDebounceMs_(0),
       pressStartMs_(0),
       longPressFired_(false),
-      longPressEvent_(false) {}
+      longPressEvent_(false),
+      shortPressEvent_(false) {}
 
 void Encoder::begin() {
   pinMode(swPin_, INPUT_PULLUP);
@@ -58,10 +59,20 @@ void Encoder::update() {
     if (reading != swState_) {
       swState_ = reading;
       if (swState_ == LOW) {
-        // Falling edge: immediate stop. Re-arm the long-press window.
-        reset();
+        // Falling edge: arm the long-press timer. Short-press doesn't
+        // fire here — it fires on release below if we didn't cross
+        // the long-press threshold. Otherwise a press intended as a
+        // long hold would fire short-press first and the caller would
+        // act on it before the hold completed.
         pressStartMs_ = millis();
         longPressFired_ = false;
+      } else {
+        // Rising edge: tap completed. If the long-press already fired
+        // for this press cycle, swallow the release. Otherwise this
+        // was a tap → short press.
+        if (!longPressFired_) {
+          shortPressEvent_ = true;
+        }
       }
     }
     if (swState_ == LOW && !longPressFired_ &&
@@ -79,6 +90,22 @@ bool Encoder::consumeLongPress() {
     return true;
   }
   return false;
+}
+
+bool Encoder::consumeShortPress() {
+  if (shortPressEvent_) {
+    shortPressEvent_ = false;
+    return true;
+  }
+  return false;
+}
+
+int Encoder::consumeDelta() {
+  noInterrupts();
+  int d = position_;
+  position_ = 0;
+  interrupts();
+  return d;
 }
 
 void IRAM_ATTR Encoder::clkIsrTrampoline() {

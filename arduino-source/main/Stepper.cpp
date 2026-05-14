@@ -43,6 +43,10 @@ void Stepper::stopTimer() {
   if (timer_) timerStop(timer_);
 }
 
+void Stepper::stop() {
+  enabled_ = false;
+}
+
 long Stepper::positionMm() const {
   // Round to nearest mm so 159 steps (0.99 mm) reads as 1, not 0.
   long pos = position_;  // atomic 32-bit read
