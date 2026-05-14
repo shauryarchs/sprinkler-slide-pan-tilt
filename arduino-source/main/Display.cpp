@@ -40,20 +40,19 @@ void Display::showMenu(int selection) {
   if (!ok_) return;
   display_.clearDisplay();
   display_.setTextColor(SSD1306_WHITE);
-
   display_.setTextSize(1);
-  display_.setCursor(0, 0);
+
+  display_.setCursor(0, 4);
   display_.println(F("Select Motor:"));
 
-  // Size-2 menu items (12x16 px) — at y=48 the last item ends at exactly
-  // y=64, the bottom of the panel.
-  display_.setTextSize(2);
-  display_.setCursor(0, 12);
-  display_.print(selection == 0 ? F("> Motor 1") : F("  Motor 1"));
-  display_.setCursor(0, 30);
-  display_.print(selection == 1 ? F("> Motor 2") : F("  Motor 2"));
-  display_.setCursor(0, 48);
-  display_.print(selection == 2 ? F("> Motor 3") : F("  Motor 3"));
+  // Size 1 (6x8 px). Longer names don't fit at size 2 — "> Slider-Motor1"
+  // is 15 chars × 12 px = 180 px, well past the 128 px panel.
+  display_.setCursor(0, 22);
+  display_.print(selection == 0 ? F("> Slider-Motor1") : F("  Slider-Motor1"));
+  display_.setCursor(0, 36);
+  display_.print(selection == 1 ? F("> Pan-Motor2") : F("  Pan-Motor2"));
+  display_.setCursor(0, 50);
+  display_.print(selection == 2 ? F("> Tilt-Motor3") : F("  Tilt-Motor3"));
 
   display_.display();
 }
@@ -121,7 +120,7 @@ void Display::showMotor2Status(int dial, long posDeg) {
   display_.print(F(" deg"));
 
   display_.setCursor(0, 44);
-  display_.print(F("Motor 2 [0-180]"));
+  display_.print(F("Pan-Motor2 [0-180]"));
 
   display_.setCursor(0, 56);
   display_.print(F("By, Shaurya Varshnay"));
@@ -156,7 +155,7 @@ void Display::showMotor3Status(int dial, long posDeg) {
   display_.print(F(" deg"));
 
   display_.setCursor(0, 44);
-  display_.print(F("Motor 3 [0-180]"));
+  display_.print(F("Tilt-Motor3 [0-180]"));
 
   display_.setCursor(0, 56);
   display_.print(F("By, Shaurya Varshnay"));
