@@ -40,23 +40,20 @@ void Display::showMenu(int selection) {
   if (!ok_) return;
   display_.clearDisplay();
   display_.setTextColor(SSD1306_WHITE);
+
   display_.setTextSize(1);
-
   display_.setCursor(0, 0);
-  display_.println(F("Ember Sensor"));
+  display_.println(F("Select Motor:"));
 
+  // Size-2 menu items (12x16 px) — at y=48 the last item ends at exactly
+  // y=64, the bottom of the panel.
+  display_.setTextSize(2);
   display_.setCursor(0, 12);
-  display_.print(F("Select Motor:"));
-
-  display_.setCursor(0, 24);
   display_.print(selection == 0 ? F("> Motor 1") : F("  Motor 1"));
-  display_.setCursor(0, 35);
+  display_.setCursor(0, 30);
   display_.print(selection == 1 ? F("> Motor 2") : F("  Motor 2"));
-  display_.setCursor(0, 46);
+  display_.setCursor(0, 48);
   display_.print(selection == 2 ? F("> Motor 3") : F("  Motor 3"));
-
-  display_.setCursor(0, 57);
-  display_.print(F("By, Shaurya Varshnay"));
 
   display_.display();
 }
