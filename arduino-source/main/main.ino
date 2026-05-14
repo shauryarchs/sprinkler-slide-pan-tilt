@@ -4,6 +4,7 @@
 #include "Encoder.h"
 #include "LimitSwitch.h"
 #include "Motor2.h"
+#include "Motor3.h"
 #include "Stepper.h"
 
 // Pin assignments use Arduino Nano ESP32 silkscreen labels.
@@ -16,6 +17,8 @@ const int kMotor1Dir = D6;
 const int kMotor1Step = D7;
 const int kMotor2Dir = D8;
 const int kMotor2Step = D9;
+const int kMotor3Dir = D10;
+const int kMotor3Step = D11;
 const int kLimit = D12;
 }  // namespace pins
 
@@ -29,6 +32,7 @@ Encoder encoder(pins::kEncoderSw, pins::kEncoderDt, pins::kEncoderClk);
 LimitSwitch limitSwitch(pins::kLimit);
 Stepper motor1(pins::kMotor1Dir, pins::kMotor1Step);
 Motor2 motor2(pins::kMotor2Dir, pins::kMotor2Step);
+Motor3 motor3(pins::kMotor3Dir, pins::kMotor3Step);
 Display oled;
 
 // UI state machine: the menu is the resting screen; selecting an item
@@ -38,16 +42,18 @@ enum class Mode {
   Menu,
   Motor1Control,
   Motor2Control,
+  Motor3Control,
 };
 Mode mode = Mode::Menu;
 int menuIndex = 0;
-const int kMenuItemCount = 2;
+const int kMenuItemCount = 3;
 
 unsigned long lastDisplayUpdateMs = 0;
 
 void enterMenu() {
   motor1.stop();
   motor2.stop();
+  motor3.stop();
   encoder.reset();
   encoder.syncSwState();  // suppress long-press from the press that got us here
   mode = Mode::Menu;
@@ -68,6 +74,13 @@ void enterMotor2() {
   lastDisplayUpdateMs = 0;
 }
 
+void enterMotor3() {
+  encoder.reset();
+  encoder.syncSwState();
+  mode = Mode::Motor3Control;
+  lastDisplayUpdateMs = 0;
+}
+
 void rehome() {
   // Long-press in Motor1 mode re-homes. Drop the encoder ISR for the
   // duration of homing, then resync after.
@@ -84,6 +97,7 @@ void setup() {
   limitSwitch.begin();
   motor1.begin();
   motor2.begin();
+  motor3.begin();
 
   Wire.begin();
   Wire.setClock(400000);
@@ -107,8 +121,11 @@ void handleMenu() {
     menuIndex = (menuIndex + step + kMenuItemCount) % kMenuItemCount;
   }
   if (encoder.consumeShortPress()) {
-    if (menuIndex == 0) enterMotor1();
-    else enterMotor2();
+    switch (menuIndex) {
+      case 0: enterMotor1(); break;
+      case 1: enterMotor2(); break;
+      case 2: enterMotor3(); break;
+    }
   }
   // Long-press has no meaning in the menu — drain it so it doesn't
   // fire later in motor mode if the user held through the transition.
@@ -159,6 +176,24 @@ void handleMotor2() {
   }
 }
 
+void handleMotor3() {
+  if (encoder.consumeShortPress()) {
+    enterMenu();
+    return;
+  }
+  encoder.consumeLongPress();
+
+  int dial = encoder.position();
+  motor3.update(dial);
+
+  long posSteps = motor3.positionSteps();
+  if (dial > 0 && posSteps >= Motor3::kMaxPositionSteps) {
+    encoder.reset();
+  } else if (dial < 0 && posSteps <= 0) {
+    encoder.reset();
+  }
+}
+
 void loop() {
   encoder.update();
 
@@ -166,6 +201,7 @@ void loop() {
     case Mode::Menu:          handleMenu();   break;
     case Mode::Motor1Control: handleMotor1(); break;
     case Mode::Motor2Control: handleMotor2(); break;
+    case Mode::Motor3Control: handleMotor3(); break;
   }
 
   if (millis() - lastDisplayUpdateMs >= kDisplayIntervalMs) {
@@ -179,6 +215,9 @@ void loop() {
         break;
       case Mode::Motor2Control:
         oled.showMotor2Status(encoder.position(), motor2.positionDegrees());
+        break;
+      case Mode::Motor3Control:
+        oled.showMotor3Status(encoder.position(), motor3.positionDegrees());
         break;
     }
     lastDisplayUpdateMs = millis();
