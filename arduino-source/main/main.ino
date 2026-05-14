@@ -71,10 +71,21 @@ void loop() {
   int dial = encoder.position();
   stepper.update(dial, limitSwitch);
 
+  // Snap the dial back to 0 when the carriage is pinned at either end
+  // of travel and the user keeps dialing further into the edge. The
+  // next click in the opposite direction then takes them straight into
+  // reverse, instead of having to wind through 0 first. Further clicks
+  // in the same direction get absorbed (encoderPos resets each frame),
+  // so the motor stays parked.
+  long posSteps = stepper.positionSteps();
+  if (dial > 0 && posSteps >= Stepper::kMaxPositionSteps) {
+    encoder.reset();
+  } else if (dial < 0 && posSteps <= Stepper::kMinPositionSteps) {
+    encoder.reset();
+  }
+
   if (millis() - lastDisplayUpdateMs >= kDisplayIntervalMs) {
-    oled.showStatus(dial, stepper.positionMm(),
-                    stepper.currentSpeedTenthsMmPerSec(),
-                    limitSwitch.engaged());
+    oled.showStatus(dial, stepper.positionMm(), limitSwitch.engaged());
     lastDisplayUpdateMs = millis();
   }
 }

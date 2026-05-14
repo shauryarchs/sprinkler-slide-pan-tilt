@@ -2,52 +2,80 @@
 
 #include "LimitSwitch.h"
 
+Stepper* Stepper::instance_ = nullptr;
+
 Stepper::Stepper(int dirPin, int stepPin)
     : dirPin_(dirPin),
       stepPin_(stepPin),
       position_(0),
       dir_(kDirCw),
-      lastStepUs_(0),
-      lastTargetInterval_(kStepIntervalMaxUs),
-      lastWantMove_(false) {}
+      targetIntervalUs_(kStepIntervalMaxUs),
+      enabled_(false),
+      stepCountdownUs_(0),
+      pulseActive_(false),
+      timer_(nullptr) {}
 
 void Stepper::begin() {
   pinMode(dirPin_, OUTPUT);
   pinMode(stepPin_, OUTPUT);
   digitalWrite(stepPin_, LOW);
   digitalWrite(dirPin_, dir_);
+
+  instance_ = this;
+
+  // Set up the step-generation timer (Arduino-ESP32 v2.x API): timer 0,
+  // divider 80 -> 80 MHz / 80 = 1 MHz tick rate = 1 µs per count, count
+  // up. Arm an auto-reload alarm every kTimerPeriodUs. The timer is
+  // paused here; home() resumes it after the carriage is at a known
+  // position.
+  timer_ = timerBegin(0, 80, true);
+  timerAttachInterrupt(timer_, &timerIsrTrampoline, true);
+  timerAlarmWrite(timer_, kTimerPeriodUs, true);
+  timerAlarmEnable(timer_);
+  timerStop(timer_);
+}
+
+void Stepper::startTimer() {
+  if (timer_) timerStart(timer_);
+}
+
+void Stepper::stopTimer() {
+  if (timer_) timerStop(timer_);
 }
 
 long Stepper::positionMm() const {
   // Round to nearest mm so 159 steps (0.99 mm) reads as 1, not 0.
-  return (position_ + kStepsPerMm / 2) / kStepsPerMm;
+  long pos = position_;  // atomic 32-bit read
+  return (pos + kStepsPerMm / 2) / kStepsPerMm;
 }
 
-unsigned long Stepper::currentSpeedTenthsMmPerSec() const {
-  if (!lastWantMove_) return 0;
-  return (10UL * 1000000UL) /
-         (lastTargetInterval_ * (unsigned long)kStepsPerMm);
-}
-
-void Stepper::stepPulse() {
+void Stepper::stepPulseBlocking() {
   digitalWrite(stepPin_, HIGH);
   delayMicroseconds(kStepPulseWidthUs);
   digitalWrite(stepPin_, LOW);
 }
 
-void Stepper::homingStep(unsigned long intervalUs) {
-  stepPulse();
+void Stepper::homingStepBlocking(unsigned long intervalUs) {
+  stepPulseBlocking();
   delayMicroseconds(intervalUs);
 }
 
 void Stepper::home(LimitSwitch& limit) {
+  // Homing uses the blocking pulse path. Stop the timer first so the
+  // ISR doesn't fight us for STEP_PIN or for position_.
+  stopTimer();
+  enabled_ = false;
+  pulseActive_ = false;
+  stepCountdownUs_ = 0;
+  digitalWrite(stepPin_, LOW);
+
   // Pass 1: fast CCW until trip. If already engaged at boot we skip
   // straight to the back-off.
   digitalWrite(dirPin_, kDirCcw);
   dir_ = kDirCcw;
   delayMicroseconds(5);
   while (!limit.engaged()) {
-    homingStep(kHomingIntervalFastUs);
+    homingStepBlocking(kHomingIntervalFastUs);
   }
 
   // Back off CW until switch releases, then clearance steps.
@@ -55,10 +83,10 @@ void Stepper::home(LimitSwitch& limit) {
   dir_ = kDirCw;
   delayMicroseconds(5);
   while (limit.engaged()) {
-    homingStep(kHomingIntervalFastUs);
+    homingStepBlocking(kHomingIntervalFastUs);
   }
   for (int i = 0; i < kHomingBackoffSteps; i++) {
-    homingStep(kHomingIntervalFastUs);
+    homingStepBlocking(kHomingIntervalFastUs);
   }
 
   // Pass 2: slow CCW re-engage for a repeatable trip point.
@@ -66,7 +94,7 @@ void Stepper::home(LimitSwitch& limit) {
   dir_ = kDirCcw;
   delayMicroseconds(5);
   while (!limit.engaged()) {
-    homingStep(kHomingIntervalSlowUs);
+    homingStepBlocking(kHomingIntervalSlowUs);
   }
 
   // Final back off so we end with the switch released and clearance set.
@@ -74,14 +102,14 @@ void Stepper::home(LimitSwitch& limit) {
   dir_ = kDirCw;
   delayMicroseconds(5);
   while (limit.engaged()) {
-    homingStep(kHomingIntervalSlowUs);
+    homingStepBlocking(kHomingIntervalSlowUs);
   }
   for (int i = 0; i < kHomingBackoffSteps; i++) {
-    homingStep(kHomingIntervalSlowUs);
+    homingStepBlocking(kHomingIntervalSlowUs);
   }
 
   position_ = 0;
-  lastStepUs_ = micros();
+  startTimer();
 }
 
 void Stepper::update(int dial, LimitSwitch& limit) {
@@ -94,37 +122,86 @@ void Stepper::update(int dial, LimitSwitch& limit) {
                          kStepIntervalMaxUs, kStepIntervalMinUs);
   }
 
+  // Snapshot position once; it's written by the ISR.
+  long pos = position_;
+  bool zeroPosition = false;
+
   // Edge guards.
-  if (desiredDir == kDirCw && position_ >= kMaxPositionSteps) {
+  if (desiredDir == kDirCw && pos >= kMaxPositionSteps) {
     wantMove = false;
   }
   if (desiredDir == kDirCcw) {
     if (limit.engaged()) {
       wantMove = false;
-      if (position_ < kMinPositionSteps + kDriftRecoveryWindowSteps) {
-        position_ = 0;
+      if (pos < kMinPositionSteps + kDriftRecoveryWindowSteps) {
+        zeroPosition = true;
       }
-    } else if (position_ <= kMinPositionSteps) {
+    } else if (pos <= kMinPositionSteps) {
       wantMove = false;
     }
   }
 
   if (wantMove) {
     if (desiredDir != dir_) {
-      dir_ = desiredDir;
+      // Direction change: briefly disable stepping, wait for any in-
+      // flight pulse to complete, switch DIR_PIN, then restart with a
+      // fresh countdown.
+      enabled_ = false;
+      delayMicroseconds(kTimerPeriodUs + 5);
       digitalWrite(dirPin_, desiredDir);
-      delayMicroseconds(5);
-      lastStepUs_ = micros();
+      dir_ = desiredDir;
+      delayMicroseconds(5);  // A4988 DIR-to-STEP setup
+      portENTER_CRITICAL(&mux_);
+      stepCountdownUs_ = targetInterval;
+      targetIntervalUs_ = targetInterval;
+      enabled_ = true;
+      portEXIT_CRITICAL(&mux_);
+    } else {
+      targetIntervalUs_ = targetInterval;
+      enabled_ = true;
     }
-    unsigned long nowUs = micros();
-    if (nowUs - lastStepUs_ >= targetInterval) {
-      stepPulse();
-      if (dir_ == kDirCw) position_++;
-      else position_--;
-      lastStepUs_ = nowUs;
-    }
+  } else {
+    enabled_ = false;
   }
 
-  lastTargetInterval_ = targetInterval;
-  lastWantMove_ = wantMove;
+  // Drift recovery: zero position only after disabling stepping and
+  // waiting out any in-flight pulse, so the ISR doesn't undo it.
+  if (zeroPosition) {
+    delayMicroseconds(kTimerPeriodUs + 5);
+    portENTER_CRITICAL(&mux_);
+    position_ = 0;
+    portEXIT_CRITICAL(&mux_);
+  }
+}
+
+void IRAM_ATTR Stepper::timerIsrTrampoline() {
+  if (instance_) instance_->onTimer();
+}
+
+void IRAM_ATTR Stepper::onTimer() {
+  if (pulseActive_) {
+    // End of the STEP HIGH phase: drop the line, count the step, reload.
+    digitalWrite(stepPin_, LOW);
+    pulseActive_ = false;
+    if (dir_ == kDirCw) position_++;
+    else position_--;
+    stepCountdownUs_ = targetIntervalUs_;
+    return;
+  }
+  if (!enabled_) return;
+
+  // Hard position bounds — the main loop normally enforces soft floor /
+  // ceiling before we get here, but during display.display() the main
+  // loop is paused for ~30 ms and these are the backstop so the motor
+  // can't run past the physical end-stops in that gap.
+  if (dir_ == kDirCw && position_ >= kMaxPositionSteps) return;
+  if (dir_ == kDirCcw && position_ <= 0) return;
+
+  if (stepCountdownUs_ <= kTimerPeriodUs) {
+    digitalWrite(stepPin_, HIGH);
+    pulseActive_ = true;
+    stepCountdownUs_ = 0;
+  } else {
+    stepCountdownUs_ -= kTimerPeriodUs;
+  }
 }
