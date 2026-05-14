@@ -27,8 +27,9 @@ const unsigned int STEP_PULSE_WIDTH_US = 3;
 const unsigned long HOMING_STEP_INTERVAL_FAST_US = 200;  // ~30 mm/s
 const unsigned long HOMING_STEP_INTERVAL_SLOW_US = 800;  // ~7.5 mm/s
 // Steps to back off after the limit switch engages, so the carriage isn't
-// resting on a depressed lever. 80 microsteps ~= 0.5 mm of clearance.
-const int HOMING_BACKOFF_STEPS = 80;
+// resting on a depressed lever. 160 microsteps ~= 1 mm of clearance — wide
+// enough to ride out switch hysteresis and small mechanical play.
+const int HOMING_BACKOFF_STEPS = 160;
 
 // Encoder dial drives a signed speed setpoint in [-ENCODER_MAX, +ENCODER_MAX].
 // Sign picks direction (positive = CW, negative = CCW), magnitude scales the
@@ -48,6 +49,13 @@ const unsigned long LONG_PRESS_MS = 1500;
 // require an explicit long-press re-home — silent re-zero from far away
 // would mask real bugs.
 const long DRIFT_RECOVERY_WINDOW_STEPS = 1600;  // ~10 mm
+
+static_assert(STEP_INTERVAL_MIN_US < STEP_INTERVAL_MAX_US,
+              "min step interval must be smaller than max (fast < slow)");
+static_assert(MIN_POSITION_STEPS < MAX_POSITION_STEPS,
+              "soft floor must be below the far limit");
+static_assert(ENCODER_MAX > 0, "encoder range must be positive");
+static_assert(HOMING_BACKOFF_STEPS > 0, "back-off must clear the switch");
 
 const int DIR_CW = LOW;
 const int DIR_CCW = HIGH;
@@ -253,6 +261,15 @@ void setup() {
   showHomingMessage();
   homeStepper();
   lastStepUs = micros();
+
+  // Sync the SW state machine to the actual pin so a user holding SW
+  // through boot doesn't get registered as a falling edge on the first
+  // loop iteration (which would trip a spurious long-press re-home
+  // LONG_PRESS_MS later).
+  encSwState = digitalRead(ENCODER_SW);
+  lastEncSwReading = encSwState;
+  lastDebounceTime = millis();
+
   // Attach the encoder ISR after homing so dial spins during the homing
   // phase are ignored (encoderPos starts at 0 when the user can drive).
   attachInterrupt(digitalPinToInterrupt(ENCODER_CLK), onEncoderClk, FALLING);
@@ -341,7 +358,10 @@ void loop() {
       spdTenths = (10UL * 1000000UL) /
                   (targetInterval * (unsigned long)STEPS_PER_MM);
     }
-    updateDisplay(dial, stepperPosition / STEPS_PER_MM, spdTenths);
+    // Round to nearest mm so the display matches what the user perceives
+    // (e.g. 159 steps = 0.99 mm should read as 1, not 0).
+    long posMm = (stepperPosition + STEPS_PER_MM / 2) / STEPS_PER_MM;
+    updateDisplay(dial, posMm, spdTenths);
     lastDisplayUpdate = millis();
   }
 }
