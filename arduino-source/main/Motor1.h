@@ -15,7 +15,7 @@ class LimitSwitch;
 //
 // Microstepping (MS1=VDD, MS2=GND on the A4988) and the GT2/20T belt
 // give 6400 steps/rev * 1/(40 mm/rev) = 160 steps/mm.
-class Stepper {
+class Motor1 {
  public:
   static constexpr long kStepsPerMm = 160;
   static constexpr long kMaxPositionMm = 1000;
@@ -53,20 +53,20 @@ class Stepper {
   // (120 µs) and 150 ticks at the max (3000 µs).
   static constexpr unsigned long kTimerPeriodUs = 20;
 
-  Stepper(int dirPin, int stepPin);
+  Motor1(int dirPin, int stepPin);
 
   void begin();
   void home(LimitSwitch& limit);
   void update(int dial, LimitSwitch& limit);
   // Disable the ISR-driven step output. Used when control of this
-  // motor is handed off (e.g. switching to the menu or to motor2).
+  // motor is handed off (e.g. switching to the menu or to another motor).
   void stop();
 
   long positionSteps() const { return position_; }
   long positionMm() const;
 
  private:
-  static Stepper* instance_;
+  static Motor1* instance_;
   static void IRAM_ATTR timerIsrTrampoline();
   void IRAM_ATTR onTimer();
 
@@ -95,11 +95,11 @@ class Stepper {
   hw_timer_t* timer_;
 };
 
-static_assert(Stepper::kStepIntervalMinUs < Stepper::kStepIntervalMaxUs,
+static_assert(Motor1::kStepIntervalMinUs < Motor1::kStepIntervalMaxUs,
               "min step interval must be smaller than max (fast < slow)");
-static_assert(Stepper::kMinPositionSteps < Stepper::kMaxPositionSteps,
+static_assert(Motor1::kMinPositionSteps < Motor1::kMaxPositionSteps,
               "soft floor must be below the far limit");
-static_assert(Stepper::kHomingBackoffSteps > 0,
+static_assert(Motor1::kHomingBackoffSteps > 0,
               "back-off must clear the switch");
-static_assert(Stepper::kStepIntervalMinUs % Stepper::kTimerPeriodUs == 0,
+static_assert(Motor1::kStepIntervalMinUs % Motor1::kTimerPeriodUs == 0,
               "step intervals should be a multiple of the timer period");

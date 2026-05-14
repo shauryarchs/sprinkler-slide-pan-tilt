@@ -21,7 +21,7 @@ void Motor2::begin() {
 
   instance_ = this;
 
-  // Timer 1 — Stepper uses timer 0. 80 MHz / 80 = 1 MHz tick.
+  // Timer 1 — Motor1 uses timer 0. 80 MHz / 80 = 1 MHz tick.
   timer_ = timerBegin(1, 80, true);
   timerAttachInterrupt(timer_, &timerIsrTrampoline, true);
   timerAlarmWrite(timer_, kTimerPeriodUs, true);

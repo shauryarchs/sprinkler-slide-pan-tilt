@@ -5,7 +5,7 @@
 #include "LimitSwitch.h"
 #include "Motor2.h"
 #include "Motor3.h"
-#include "Stepper.h"
+#include "Motor1.h"
 
 // Pin assignments use Arduino Nano ESP32 silkscreen labels.
 // The core resolves them to the right ESP32-S3 GPIOs.
@@ -30,7 +30,7 @@ const unsigned long kDisplayIntervalMs = 100;
 
 Encoder encoder(pins::kEncoderSw, pins::kEncoderDt, pins::kEncoderClk);
 LimitSwitch limitSwitch(pins::kLimit);
-Stepper motor1(pins::kMotor1Dir, pins::kMotor1Step);
+Motor1 motor1(pins::kMotor1Dir, pins::kMotor1Step);
 Motor2 motor2(pins::kMotor2Dir, pins::kMotor2Step);
 Motor3 motor3(pins::kMotor3Dir, pins::kMotor3Step);
 Display oled;
@@ -148,9 +148,9 @@ void handleMotor1() {
   // Auto-reset the dial when pinned at an end of travel so the next
   // click in the opposite direction goes straight into reverse.
   long posSteps = motor1.positionSteps();
-  if (dial > 0 && posSteps >= Stepper::kMaxPositionSteps) {
+  if (dial > 0 && posSteps >= Motor1::kMaxPositionSteps) {
     encoder.reset();
-  } else if (dial < 0 && posSteps <= Stepper::kMinPositionSteps) {
+  } else if (dial < 0 && posSteps <= Motor1::kMinPositionSteps) {
     encoder.reset();
   }
 }
