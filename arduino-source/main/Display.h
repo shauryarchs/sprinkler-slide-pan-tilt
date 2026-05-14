@@ -16,7 +16,12 @@ class Display {
   bool isOk() const { return ok_; }
 
   void showHomingMessage();
-  void showStatus(int dial, long posMm, bool limitEngaged);
+  // Motor-selection screen shown while no motor is active. selection
+  // indexes the menu items (0 = Motor 1, 1 = Motor 2).
+  void showMenu(int selection);
+  // Status screens for each motor while it's being controlled.
+  void showMotor1Status(int dial, long posMm, bool limitEngaged);
+  void showMotor2Status(int dial, long posDeg);
 
  private:
   Adafruit_SSD1306 display_;

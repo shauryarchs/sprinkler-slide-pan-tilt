@@ -23,6 +23,11 @@ class Encoder {
   int position() const;             // current signed dial value
   void reset();                     // zero the dial (interrupt-safe)
 
+  // Consume the dial position as a delta: returns the current value and
+  // zeros it atomically. Use this when the encoder is driving discrete
+  // navigation (menu scrolling) rather than an absolute speed setpoint.
+  int consumeDelta();
+
   // Pause/resume the CLK ISR. Use around blocking operations like
   // homing where dial spins should be ignored.
   void suspend();
@@ -33,7 +38,11 @@ class Encoder {
   // new falling edge or fire an immediate long-press.
   void syncSwState();
 
-  // One-shot: true the first call after a long-press fires, then false.
+  // One-shot SW events. consumeShortPress() fires on release if the
+  // button was held for less than kLongPressMs ("tap"). consumeLongPress()
+  // fires once while the button is still held, when the hold crosses
+  // kLongPressMs. They're mutually exclusive for a given press cycle.
+  bool consumeShortPress();
   bool consumeLongPress();
 
  private:
@@ -54,6 +63,7 @@ class Encoder {
   unsigned long pressStartMs_;
   bool longPressFired_;
   bool longPressEvent_;
+  bool shortPressEvent_;
 };
 
 static_assert(Encoder::kRange > 0, "encoder range must be positive");
