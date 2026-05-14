@@ -18,7 +18,7 @@ class LimitSwitch;
 class SliderMotor1 {
  public:
   static constexpr long kStepsPerMm = 160;
-  static constexpr long kMaxPositionMm = 1000;
+  static constexpr long kMaxPositionMm = 975;
   static constexpr long kMinPositionMm = 5;
   static constexpr long kMaxPositionSteps = kMaxPositionMm * kStepsPerMm;
   static constexpr long kMinPositionSteps = kMinPositionMm * kStepsPerMm;
