@@ -3,9 +3,9 @@
 #include "Display.h"
 #include "Encoder.h"
 #include "LimitSwitch.h"
-#include "Motor2.h"
-#include "Motor3.h"
-#include "Motor1.h"
+#include "PanMotor2.h"
+#include "SliderMotor1.h"
+#include "TiltMotor3.h"
 
 // Pin assignments use Arduino Nano ESP32 silkscreen labels.
 // The core resolves them to the right ESP32-S3 GPIOs.
@@ -30,9 +30,9 @@ const unsigned long kDisplayIntervalMs = 100;
 
 Encoder encoder(pins::kEncoderSw, pins::kEncoderDt, pins::kEncoderClk);
 LimitSwitch limitSwitch(pins::kLimit);
-Motor1 motor1(pins::kMotor1Dir, pins::kMotor1Step);
-Motor2 motor2(pins::kMotor2Dir, pins::kMotor2Step);
-Motor3 motor3(pins::kMotor3Dir, pins::kMotor3Step);
+SliderMotor1 sliderMotor1(pins::kMotor1Dir, pins::kMotor1Step);
+PanMotor2 panMotor2(pins::kMotor2Dir, pins::kMotor2Step);
+TiltMotor3 tiltMotor3(pins::kMotor3Dir, pins::kMotor3Step);
 Display oled;
 
 // UI state machine: the menu is the resting screen; selecting an item
@@ -51,9 +51,9 @@ const int kMenuItemCount = 3;
 unsigned long lastDisplayUpdateMs = 0;
 
 void enterMenu() {
-  motor1.stop();
-  motor2.stop();
-  motor3.stop();
+  sliderMotor1.stop();
+  panMotor2.stop();
+  tiltMotor3.stop();
   encoder.reset();
   encoder.syncSwState();  // suppress long-press from the press that got us here
   mode = Mode::Menu;
@@ -86,7 +86,7 @@ void rehome() {
   // duration of homing, then resync after.
   encoder.suspend();
   oled.showHomingMessage();
-  motor1.home(limitSwitch);
+  sliderMotor1.home(limitSwitch);
   encoder.reset();
   encoder.resume();
   encoder.syncSwState();
@@ -95,9 +95,9 @@ void rehome() {
 
 void setup() {
   limitSwitch.begin();
-  motor1.begin();
-  motor2.begin();
-  motor3.begin();
+  sliderMotor1.begin();
+  panMotor2.begin();
+  tiltMotor3.begin();
 
   Wire.begin();
   Wire.setClock(400000);
@@ -106,7 +106,7 @@ void setup() {
   // Motor1 boot homing; motor2 has no limit switch so we just trust
   // its mechanical alignment at power-on.
   oled.showHomingMessage();
-  motor1.home(limitSwitch);
+  sliderMotor1.home(limitSwitch);
 
   encoder.begin();
   encoder.syncSwState();
@@ -143,14 +143,14 @@ void handleMotor1() {
   }
 
   int dial = encoder.position();
-  motor1.update(dial, limitSwitch);
+  sliderMotor1.update(dial, limitSwitch);
 
   // Auto-reset the dial when pinned at an end of travel so the next
   // click in the opposite direction goes straight into reverse.
-  long posSteps = motor1.positionSteps();
-  if (dial > 0 && posSteps >= Motor1::kMaxPositionSteps) {
+  long posSteps = sliderMotor1.positionSteps();
+  if (dial > 0 && posSteps >= SliderMotor1::kMaxPositionSteps) {
     encoder.reset();
-  } else if (dial < 0 && posSteps <= Motor1::kMinPositionSteps) {
+  } else if (dial < 0 && posSteps <= SliderMotor1::kMinPositionSteps) {
     encoder.reset();
   }
 }
@@ -164,12 +164,12 @@ void handleMotor2() {
   encoder.consumeLongPress();
 
   int dial = encoder.position();
-  motor2.update(dial);
+  panMotor2.update(dial);
 
   // Same auto-reset idea: at either end of the 0-180° range, snap the
   // dial back to 0 so reversing is one click away.
-  long posSteps = motor2.positionSteps();
-  if (dial > 0 && posSteps >= Motor2::kMaxPositionSteps) {
+  long posSteps = panMotor2.positionSteps();
+  if (dial > 0 && posSteps >= PanMotor2::kMaxPositionSteps) {
     encoder.reset();
   } else if (dial < 0 && posSteps <= 0) {
     encoder.reset();
@@ -184,10 +184,10 @@ void handleMotor3() {
   encoder.consumeLongPress();
 
   int dial = encoder.position();
-  motor3.update(dial);
+  tiltMotor3.update(dial);
 
-  long posSteps = motor3.positionSteps();
-  if (dial > 0 && posSteps >= Motor3::kMaxPositionSteps) {
+  long posSteps = tiltMotor3.positionSteps();
+  if (dial > 0 && posSteps >= TiltMotor3::kMaxPositionSteps) {
     encoder.reset();
   } else if (dial < 0 && posSteps <= 0) {
     encoder.reset();
@@ -210,14 +210,14 @@ void loop() {
         oled.showMenu(menuIndex);
         break;
       case Mode::Motor1Control:
-        oled.showMotor1Status(encoder.position(), motor1.positionMm(),
+        oled.showMotor1Status(encoder.position(), sliderMotor1.positionMm(),
                               limitSwitch.engaged());
         break;
       case Mode::Motor2Control:
-        oled.showMotor2Status(encoder.position(), motor2.positionDegrees());
+        oled.showMotor2Status(encoder.position(), panMotor2.positionDegrees());
         break;
       case Mode::Motor3Control:
-        oled.showMotor3Status(encoder.position(), motor3.positionDegrees());
+        oled.showMotor3Status(encoder.position(), tiltMotor3.positionDegrees());
         break;
     }
     lastDisplayUpdateMs = millis();

@@ -1,8 +1,8 @@
-#include "Motor2.h"
+#include "TiltMotor3.h"
 
-Motor2* Motor2::instance_ = nullptr;
+TiltMotor3* TiltMotor3::instance_ = nullptr;
 
-Motor2::Motor2(int dirPin, int stepPin)
+TiltMotor3::TiltMotor3(int dirPin, int stepPin)
     : dirPin_(dirPin),
       stepPin_(stepPin),
       position_(0),
@@ -13,7 +13,7 @@ Motor2::Motor2(int dirPin, int stepPin)
       pulseActive_(false),
       timer_(nullptr) {}
 
-void Motor2::begin() {
+void TiltMotor3::begin() {
   pinMode(dirPin_, OUTPUT);
   pinMode(stepPin_, OUTPUT);
   digitalWrite(stepPin_, LOW);
@@ -21,25 +21,23 @@ void Motor2::begin() {
 
   instance_ = this;
 
-  // Timer 1 — Motor1 uses timer 0. 80 MHz / 80 = 1 MHz tick.
-  timer_ = timerBegin(1, 80, true);
+  // Timer 2 — SliderMotor1 owns timer 0, PanMotor2 owns timer 1.
+  timer_ = timerBegin(2, 80, true);
   timerAttachInterrupt(timer_, &timerIsrTrampoline, true);
   timerAlarmWrite(timer_, kTimerPeriodUs, true);
   timerAlarmEnable(timer_);
-  // No homing for motor2, so start the timer running immediately.
-  // update() will arm enabled_ when the user dials.
 }
 
-void Motor2::stop() {
+void TiltMotor3::stop() {
   enabled_ = false;
 }
 
-long Motor2::positionDegrees() const {
+long TiltMotor3::positionDegrees() const {
   long pos = position_;
   return (pos * kMaxAngleDeg + kMaxPositionSteps / 2) / kMaxPositionSteps;
 }
 
-void Motor2::update(int dial) {
+void TiltMotor3::update(int dial) {
   bool wantMove = (dial != 0);
   uint8_t desiredDir = (dial > 0) ? kDirCw : kDirCcw;
   int mag = (dial > 0) ? dial : -dial;
@@ -51,8 +49,6 @@ void Motor2::update(int dial) {
 
   long pos = position_;
 
-  // Bounds: motor2 lives in [0, kMaxPositionSteps]. No drift recovery —
-  // there's no limit switch to act as a reference.
   if (desiredDir == kDirCw && pos >= kMaxPositionSteps) wantMove = false;
   if (desiredDir == kDirCcw && pos <= 0) wantMove = false;
 
@@ -77,11 +73,11 @@ void Motor2::update(int dial) {
   }
 }
 
-void IRAM_ATTR Motor2::timerIsrTrampoline() {
+void IRAM_ATTR TiltMotor3::timerIsrTrampoline() {
   if (instance_) instance_->onTimer();
 }
 
-void IRAM_ATTR Motor2::onTimer() {
+void IRAM_ATTR TiltMotor3::onTimer() {
   if (pulseActive_) {
     digitalWrite(stepPin_, LOW);
     pulseActive_ = false;
@@ -92,9 +88,6 @@ void IRAM_ATTR Motor2::onTimer() {
   }
   if (!enabled_) return;
 
-  // Hard bounds backstop — main loop normally catches this earlier but
-  // the ISR keeps running during display.display() blocks, so without
-  // this check the motor could overrun while the loop is paused.
   if (dir_ == kDirCw && position_ >= kMaxPositionSteps) return;
   if (dir_ == kDirCcw && position_ <= 0) return;
 
