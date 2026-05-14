@@ -25,12 +25,15 @@ void Stepper::begin() {
 
   instance_ = this;
 
-  // Set up the step-generation timer at 1 MHz (1 µs per count) and arm
-  // an auto-reloading alarm every kTimerPeriodUs. The timer is paused
-  // here; home() resumes it after the carriage is at a known position.
-  timer_ = timerBegin(1000000);
-  timerAttachInterrupt(timer_, &timerIsrTrampoline);
-  timerAlarm(timer_, kTimerPeriodUs, true, 0);
+  // Set up the step-generation timer (Arduino-ESP32 v2.x API): timer 0,
+  // divider 80 -> 80 MHz / 80 = 1 MHz tick rate = 1 µs per count, count
+  // up. Arm an auto-reload alarm every kTimerPeriodUs. The timer is
+  // paused here; home() resumes it after the carriage is at a known
+  // position.
+  timer_ = timerBegin(0, 80, true);
+  timerAttachInterrupt(timer_, &timerIsrTrampoline, true);
+  timerAlarmWrite(timer_, kTimerPeriodUs, true);
+  timerAlarmEnable(timer_);
   timerStop(timer_);
 }
 
