@@ -15,7 +15,7 @@ class LimitSwitch;
 //
 // Microstepping (MS1=VDD, MS2=GND on the A4988) and the GT2/20T belt
 // give 6400 steps/rev * 1/(40 mm/rev) = 160 steps/mm.
-class Motor1 {
+class SliderMotor1 {
  public:
   static constexpr long kStepsPerMm = 160;
   static constexpr long kMaxPositionMm = 1000;
@@ -53,7 +53,7 @@ class Motor1 {
   // (120 µs) and 150 ticks at the max (3000 µs).
   static constexpr unsigned long kTimerPeriodUs = 20;
 
-  Motor1(int dirPin, int stepPin);
+  SliderMotor1(int dirPin, int stepPin);
 
   void begin();
   void home(LimitSwitch& limit);
@@ -66,7 +66,7 @@ class Motor1 {
   long positionMm() const;
 
  private:
-  static Motor1* instance_;
+  static SliderMotor1* instance_;
   static void IRAM_ATTR timerIsrTrampoline();
   void IRAM_ATTR onTimer();
 
@@ -95,11 +95,11 @@ class Motor1 {
   hw_timer_t* timer_;
 };
 
-static_assert(Motor1::kStepIntervalMinUs < Motor1::kStepIntervalMaxUs,
+static_assert(SliderMotor1::kStepIntervalMinUs < SliderMotor1::kStepIntervalMaxUs,
               "min step interval must be smaller than max (fast < slow)");
-static_assert(Motor1::kMinPositionSteps < Motor1::kMaxPositionSteps,
+static_assert(SliderMotor1::kMinPositionSteps < SliderMotor1::kMaxPositionSteps,
               "soft floor must be below the far limit");
-static_assert(Motor1::kHomingBackoffSteps > 0,
+static_assert(SliderMotor1::kHomingBackoffSteps > 0,
               "back-off must clear the switch");
-static_assert(Motor1::kStepIntervalMinUs % Motor1::kTimerPeriodUs == 0,
+static_assert(SliderMotor1::kStepIntervalMinUs % SliderMotor1::kTimerPeriodUs == 0,
               "step intervals should be a multiple of the timer period");

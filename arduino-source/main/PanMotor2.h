@@ -2,21 +2,21 @@
 
 #include <Arduino.h>
 
-// Second TMC2209-driven stepper. Same step/dir interface as Motor1 but
-// no limit switch and no homing — the motor is assumed to be at "0°"
+// Second TMC2209-driven stepper. Same step/dir interface as SliderMotor1
+// but no limit switch and no homing — the motor is assumed to be at "0°"
 // at boot, so it must be mechanically aligned before power-up. Travel
 // is bounded in software to [0°, 180°].
 //
 // Uses its own hardware timer (timer 1) for step generation, mirroring
-// the Motor1 class so a blocking display.display() in the main loop
-// doesn't pause the pulse stream.
+// the SliderMotor1 class so a blocking display.display() in the main
+// loop doesn't pause the pulse stream.
 //
 // Assumes the TMC2209 MS pins are configured for 1/32 microstepping,
 // giving 200 * 32 = 6400 microsteps per motor revolution. With a 1:1
 // shaft coupling that's 6400/360 microsteps/degree, so 180° is 3200
 // microsteps. Adjust kStepsPerRev if your microstepping or gearing
 // differs.
-class Motor2 {
+class PanMotor2 {
  public:
   static constexpr long kStepsPerRev = 6400;
   static constexpr long kMaxAngleDeg = 180;
@@ -33,7 +33,7 @@ class Motor2 {
 
   static constexpr unsigned long kTimerPeriodUs = 20;
 
-  Motor2(int dirPin, int stepPin);
+  PanMotor2(int dirPin, int stepPin);
 
   void begin();
   // Per-loop call: writes target step interval / direction / enabled
@@ -45,7 +45,7 @@ class Motor2 {
   long positionDegrees() const;
 
  private:
-  static Motor2* instance_;
+  static PanMotor2* instance_;
   static void IRAM_ATTR timerIsrTrampoline();
   void IRAM_ATTR onTimer();
 
@@ -64,9 +64,9 @@ class Motor2 {
   hw_timer_t* timer_;
 };
 
-static_assert(Motor2::kStepIntervalMinUs < Motor2::kStepIntervalMaxUs,
+static_assert(PanMotor2::kStepIntervalMinUs < PanMotor2::kStepIntervalMaxUs,
               "min step interval must be smaller than max (fast < slow)");
-static_assert(Motor2::kMaxPositionSteps > 0,
+static_assert(PanMotor2::kMaxPositionSteps > 0,
               "max position must be positive");
-static_assert(Motor2::kStepIntervalMinUs % Motor2::kTimerPeriodUs == 0,
+static_assert(PanMotor2::kStepIntervalMinUs % PanMotor2::kTimerPeriodUs == 0,
               "step intervals should be a multiple of the timer period");

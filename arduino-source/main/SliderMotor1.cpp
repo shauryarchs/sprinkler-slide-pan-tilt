@@ -1,10 +1,10 @@
-#include "Motor1.h"
+#include "SliderMotor1.h"
 
 #include "LimitSwitch.h"
 
-Motor1* Motor1::instance_ = nullptr;
+SliderMotor1* SliderMotor1::instance_ = nullptr;
 
-Motor1::Motor1(int dirPin, int stepPin)
+SliderMotor1::SliderMotor1(int dirPin, int stepPin)
     : dirPin_(dirPin),
       stepPin_(stepPin),
       position_(0),
@@ -15,7 +15,7 @@ Motor1::Motor1(int dirPin, int stepPin)
       pulseActive_(false),
       timer_(nullptr) {}
 
-void Motor1::begin() {
+void SliderMotor1::begin() {
   pinMode(dirPin_, OUTPUT);
   pinMode(stepPin_, OUTPUT);
   digitalWrite(stepPin_, LOW);
@@ -35,36 +35,36 @@ void Motor1::begin() {
   timerStop(timer_);
 }
 
-void Motor1::startTimer() {
+void SliderMotor1::startTimer() {
   if (timer_) timerStart(timer_);
 }
 
-void Motor1::stopTimer() {
+void SliderMotor1::stopTimer() {
   if (timer_) timerStop(timer_);
 }
 
-void Motor1::stop() {
+void SliderMotor1::stop() {
   enabled_ = false;
 }
 
-long Motor1::positionMm() const {
+long SliderMotor1::positionMm() const {
   // Round to nearest mm so 159 steps (0.99 mm) reads as 1, not 0.
   long pos = position_;  // atomic 32-bit read
   return (pos + kStepsPerMm / 2) / kStepsPerMm;
 }
 
-void Motor1::stepPulseBlocking() {
+void SliderMotor1::stepPulseBlocking() {
   digitalWrite(stepPin_, HIGH);
   delayMicroseconds(kStepPulseWidthUs);
   digitalWrite(stepPin_, LOW);
 }
 
-void Motor1::homingStepBlocking(unsigned long intervalUs) {
+void SliderMotor1::homingStepBlocking(unsigned long intervalUs) {
   stepPulseBlocking();
   delayMicroseconds(intervalUs);
 }
 
-void Motor1::home(LimitSwitch& limit) {
+void SliderMotor1::home(LimitSwitch& limit) {
   // Homing uses the blocking pulse path. Stop the timer first so the
   // ISR doesn't fight us for STEP_PIN or for position_.
   stopTimer();
@@ -116,7 +116,7 @@ void Motor1::home(LimitSwitch& limit) {
   startTimer();
 }
 
-void Motor1::update(int dial, LimitSwitch& limit) {
+void SliderMotor1::update(int dial, LimitSwitch& limit) {
   bool wantMove = (dial != 0);
   uint8_t desiredDir = (dial > 0) ? kDirCw : kDirCcw;
   int mag = (dial > 0) ? dial : -dial;
@@ -178,11 +178,11 @@ void Motor1::update(int dial, LimitSwitch& limit) {
   }
 }
 
-void IRAM_ATTR Motor1::timerIsrTrampoline() {
+void IRAM_ATTR SliderMotor1::timerIsrTrampoline() {
   if (instance_) instance_->onTimer();
 }
 
-void IRAM_ATTR Motor1::onTimer() {
+void IRAM_ATTR SliderMotor1::onTimer() {
   if (pulseActive_) {
     // End of the STEP HIGH phase: drop the line, count the step, reload.
     digitalWrite(stepPin_, LOW);
