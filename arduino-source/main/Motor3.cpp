@@ -21,7 +21,7 @@ void Motor3::begin() {
 
   instance_ = this;
 
-  // Timer 2 — Stepper owns timer 0, Motor2 owns timer 1.
+  // Timer 2 — Motor1 owns timer 0, Motor2 owns timer 1.
   timer_ = timerBegin(2, 80, true);
   timerAttachInterrupt(timer_, &timerIsrTrampoline, true);
   timerAlarmWrite(timer_, kTimerPeriodUs, true);

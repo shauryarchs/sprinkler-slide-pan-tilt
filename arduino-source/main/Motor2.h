@@ -8,7 +8,7 @@
 // is bounded in software to [0°, 180°].
 //
 // Uses its own hardware timer (timer 1) for step generation, mirroring
-// the Stepper class so a blocking display.display() in the main loop
+// the Motor1 class so a blocking display.display() in the main loop
 // doesn't pause the pulse stream.
 //
 // Assumes the TMC2209 MS pins are configured for 1/32 microstepping,

@@ -9,7 +9,7 @@
 // wherever the motor happens to be at boot, so it must be mechanically
 // aligned before power-on.
 //
-// Microstepping assumption matches Motor2 / Stepper: 1/32 → 6400
+// Microstepping assumption matches Motor1 / Motor2: 1/32 → 6400
 // microsteps per revolution → 3200 microsteps for 180°. Edit
 // kStepsPerRev if your MS-pin wiring gives a different value.
 class Motor3 {
