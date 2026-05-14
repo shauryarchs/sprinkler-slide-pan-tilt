@@ -71,6 +71,15 @@ void loop() {
   int dial = encoder.position();
   stepper.update(dial, limitSwitch);
 
+  // When the carriage is pinned against the far end of travel, snap the
+  // dial back to 0 if the user is still dialing CW. The next CCW click
+  // then takes them straight into reverse without having to wind the
+  // dial all the way back through 0 first. Further CW clicks at max
+  // get absorbed (encoderPos resets each frame), so the motor stays put.
+  if (dial > 0 && stepper.positionSteps() >= Stepper::kMaxPositionSteps) {
+    encoder.reset();
+  }
+
   if (millis() - lastDisplayUpdateMs >= kDisplayIntervalMs) {
     oled.showStatus(dial, stepper.positionMm(), limitSwitch.engaged());
     lastDisplayUpdateMs = millis();
