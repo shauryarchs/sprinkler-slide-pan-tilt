@@ -36,8 +36,7 @@ void Display::showHomingMessage() {
   display_.display();
 }
 
-void Display::showStatus(int dial, long posMm, unsigned long spdTenths,
-                         bool limitEngaged) {
+void Display::showStatus(int dial, long posMm, bool limitEngaged) {
   if (!ok_) return;
   display_.clearDisplay();
   display_.setTextColor(SSD1306_WHITE);
@@ -58,15 +57,10 @@ void Display::showStatus(int dial, long posMm, unsigned long spdTenths,
   else if (dial < 0) display_.print(F("CCW"));
   else display_.print(F("STOP"));
 
-  // Compact labels to fit "P:1000mm S:52.0mm/s" in 128 px width.
   display_.setCursor(0, 33);
-  display_.print(F("P:"));
+  display_.print(F("Pos: "));
   display_.print(posMm);
-  display_.print(F("mm S:"));
-  display_.print(spdTenths / 10);
-  display_.print('.');
-  display_.print(spdTenths % 10);
-  display_.print(F("mm/s"));
+  display_.print(F(" mm"));
 
   display_.setCursor(0, 44);
   display_.print(F("Limit: "));

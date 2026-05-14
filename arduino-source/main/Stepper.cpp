@@ -13,8 +13,6 @@ Stepper::Stepper(int dirPin, int stepPin)
       enabled_(false),
       stepCountdownUs_(0),
       pulseActive_(false),
-      lastTargetInterval_(kStepIntervalMaxUs),
-      lastWantMove_(false),
       timer_(nullptr) {}
 
 void Stepper::begin() {
@@ -49,12 +47,6 @@ long Stepper::positionMm() const {
   // Round to nearest mm so 159 steps (0.99 mm) reads as 1, not 0.
   long pos = position_;  // atomic 32-bit read
   return (pos + kStepsPerMm / 2) / kStepsPerMm;
-}
-
-unsigned long Stepper::currentSpeedTenthsMmPerSec() const {
-  if (!lastWantMove_) return 0;
-  return (10UL * 1000000UL) /
-         (lastTargetInterval_ * (unsigned long)kStepsPerMm);
 }
 
 void Stepper::stepPulseBlocking() {
@@ -180,9 +172,6 @@ void Stepper::update(int dial, LimitSwitch& limit) {
     position_ = 0;
     portEXIT_CRITICAL(&mux_);
   }
-
-  lastTargetInterval_ = targetInterval;
-  lastWantMove_ = wantMove;
 }
 
 void IRAM_ATTR Stepper::timerIsrTrampoline() {

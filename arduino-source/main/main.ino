@@ -72,9 +72,7 @@ void loop() {
   stepper.update(dial, limitSwitch);
 
   if (millis() - lastDisplayUpdateMs >= kDisplayIntervalMs) {
-    oled.showStatus(dial, stepper.positionMm(),
-                    stepper.currentSpeedTenthsMmPerSec(),
-                    limitSwitch.engaged());
+    oled.showStatus(dial, stepper.positionMm(), limitSwitch.engaged());
     lastDisplayUpdateMs = millis();
   }
 }

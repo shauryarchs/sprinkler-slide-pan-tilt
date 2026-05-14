@@ -61,7 +61,6 @@ class Stepper {
 
   long positionSteps() const { return position_; }
   long positionMm() const;
-  unsigned long currentSpeedTenthsMmPerSec() const;
 
  private:
   static Stepper* instance_;
@@ -89,10 +88,6 @@ class Stepper {
   volatile bool pulseActive_;
 
   portMUX_TYPE mux_ = portMUX_INITIALIZER_UNLOCKED;
-
-  // Diagnostic snapshot for currentSpeedTenthsMmPerSec().
-  unsigned long lastTargetInterval_;
-  bool lastWantMove_;
 
   hw_timer_t* timer_;
 };

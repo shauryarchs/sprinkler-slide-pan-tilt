@@ -16,8 +16,7 @@ class Display {
   bool isOk() const { return ok_; }
 
   void showHomingMessage();
-  void showStatus(int dial, long posMm, unsigned long spdTenths,
-                  bool limitEngaged);
+  void showStatus(int dial, long posMm, bool limitEngaged);
 
  private:
   Adafruit_SSD1306 display_;
