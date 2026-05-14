@@ -45,7 +45,10 @@ unsigned long lastDebounceTime = 0;
 const unsigned long debounceDelay = 50;
 
 unsigned long lastDisplayUpdate = 0;
-const unsigned long displayInterval = 100;
+// display.display() blocks ~30 ms on the I2C frame transfer; at 100 ms that
+// was eating ~30% of stepping time and the motor jittered audibly at high
+// dial values. 250 ms keeps the UI readable while cutting duty loss to ~12%.
+const unsigned long displayInterval = 250;
 
 long stepperPosition = 0;
 uint8_t stepperDir = DIR_CW;
@@ -80,9 +83,14 @@ void stepHomingPulse() {
   delayMicroseconds(HOMING_STEP_INTERVAL_US);
 }
 
+// Steps to back off after the limit switch engages, so the carriage isn't
+// resting on a depressed lever (which would re-trip on the slightest drift).
+// 80 microsteps ~= 0.5 mm of clearance.
+const int HOMING_BACKOFF_STEPS = 80;
+
 void homeStepper() {
   // Drive CCW until the limit switch engages. If it's already engaged at
-  // boot, the loop body is skipped and we just zero the position.
+  // boot, the loop body is skipped and we go straight to the back-off.
   digitalWrite(DIR_PIN, DIR_CCW);
   stepperDir = DIR_CCW;
   delayMicroseconds(5);
@@ -90,9 +98,20 @@ void homeStepper() {
     stepHomingPulse();
   }
 
-  stepperPosition = 0;
+  // Back off CW until the switch releases, then a few more steps for
+  // clearance. Position 0 is set *after* the back-off so the soft floor
+  // (MIN_POSITION_STEPS) protects against re-tripping the switch on CCW.
   digitalWrite(DIR_PIN, DIR_CW);
   stepperDir = DIR_CW;
+  delayMicroseconds(5);
+  while (digitalRead(LIMIT_PIN) == LOW) {
+    stepHomingPulse();
+  }
+  for (int i = 0; i < HOMING_BACKOFF_STEPS; i++) {
+    stepHomingPulse();
+  }
+
+  stepperPosition = 0;
 }
 
 void updateDisplay(int dial, long posMm, unsigned long spdMmPerSec) {
@@ -175,7 +194,14 @@ void loop() {
   if ((millis() - lastDebounceTime) > debounceDelay) {
     if (reading != encSwState) {
       encSwState = reading;
-      if (encSwState == LOW) encoderPos = 0;
+      if (encSwState == LOW) {
+        // Guard against the ISR firing mid-reset and leaving encoderPos at
+        // ±1 instead of 0 (read-modify-write in onEncoderClk races with
+        // this store otherwise).
+        noInterrupts();
+        encoderPos = 0;
+        interrupts();
+      }
     }
   }
   lastEncSwReading = reading;
