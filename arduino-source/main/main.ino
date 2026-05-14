@@ -19,9 +19,11 @@ const int kMotor2Step = D9;
 const int kLimit = D12;
 }  // namespace pins
 
-// display.display() blocks ~30 ms on I2C; refreshing every 250 ms keeps
-// the UI readable while limiting stepping duty loss to ~12%.
-const unsigned long kDisplayIntervalMs = 250;
+// display.display() blocks the main loop for ~30 ms on the I2C frame
+// transfer. With timer-driven stepping the motor's pulse stream is
+// unaffected by that block, so we can refresh aggressively for snappy
+// dial feedback (10 fps -> ~150 ms worst-case visual lag from a click).
+const unsigned long kDisplayIntervalMs = 100;
 
 Encoder encoder(pins::kEncoderSw, pins::kEncoderDt, pins::kEncoderClk);
 LimitSwitch limitSwitch(pins::kLimit);
