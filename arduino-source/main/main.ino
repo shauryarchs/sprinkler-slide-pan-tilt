@@ -4,7 +4,6 @@
 #include "Encoder.h"
 #include "LimitSwitch.h"
 #include "Stepper.h"
-#include "StatusLed.h"
 
 // Pin assignments use Arduino Nano ESP32 silkscreen labels (D3/D4/D5/D6/D7/D10).
 // The core resolves them to the right ESP32-S3 GPIOs.
@@ -25,7 +24,6 @@ Encoder encoder(pins::kEncoderSw, pins::kEncoderDt, pins::kEncoderClk);
 LimitSwitch limitSwitch(pins::kLimit);
 Stepper stepper(pins::kStepperDir, pins::kStepperStep);
 Display oled;
-StatusLed statusLed(LED_BUILTIN);
 
 unsigned long lastDisplayUpdateMs = 0;
 
@@ -45,15 +43,13 @@ void rehome() {
 void setup() {
   limitSwitch.begin();
   stepper.begin();
-  statusLed.begin();
 
   Wire.begin();
   Wire.setClock(400000);
 
-  // If the OLED is missing we run motor-only and flag the fallback with
-  // a 1 Hz heartbeat on the onboard LED.
-  bool displayOk = oled.begin();
-  statusLed.setBlinking(!displayOk);
+  // If the OLED is missing show*() calls are silent no-ops, so the motor
+  // still runs without it.
+  oled.begin();
 
   oled.showHomingMessage();
   stepper.home(limitSwitch);
@@ -67,7 +63,6 @@ void setup() {
 
 void loop() {
   encoder.update();
-  statusLed.update();
 
   if (encoder.consumeLongPress()) {
     rehome();
