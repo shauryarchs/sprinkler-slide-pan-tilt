@@ -1,3 +1,7 @@
+# Wi-Fi credentials — copy secrets.h.example to secrets.h and fill in
+# real values locally; never commit the real file.
+arduino-source/main/secrets.h
+
 # macOS
 .DS_Store
 .AppleDouble
