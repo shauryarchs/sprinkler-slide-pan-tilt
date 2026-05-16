@@ -43,10 +43,25 @@ enum class Mode {
   Motor1Control,
   Motor2Control,
   Motor3Control,
+  AllMotorsControl,
 };
 Mode mode = Mode::Menu;
 int menuIndex = 0;
-const int kMenuItemCount = 3;
+const int kMenuItemCount = 4;
+
+// "All motors" demo mode. Slider bounces between its soft floor and
+// ceiling; Pan and Tilt rotate CW continuously. Speeds are fixed (the
+// encoder dial is inert in this mode) — magnitudes are on the encoder's
+// signed [-kEncoderRange, +kEncoderRange] scale.
+const int kAllMotorsSliderSpeed = 15;
+const int kAllMotorsPanSpeed = 12;
+const int kAllMotorsTiltSpeed = 12;
+// Wrap Pan/Tilt back below the soft ceiling this many steps early so
+// the ISR's hard backstop never trips during a display.display() block.
+const long kAllMotorsWrapMarginSteps = 200;
+// Bounce state for the slider in all-motors mode. +1 = heading toward
+// the soft ceiling, -1 = heading toward the soft floor.
+int allMotorsSliderDir = 1;
 
 unsigned long lastDisplayUpdateMs = 0;
 
@@ -78,6 +93,21 @@ void enterMotor3() {
   encoder.reset();
   encoder.syncSwState();
   mode = Mode::Motor3Control;
+  lastDisplayUpdateMs = 0;
+}
+
+void enterAllMotors() {
+  encoder.reset();
+  encoder.syncSwState();
+  // Pick a slider direction that doesn't stall against the ceiling on
+  // entry. If the carriage already sits at the soft ceiling, start by
+  // heading back; otherwise head out.
+  if (sliderMotor1.positionSteps() >= SliderMotor1::kMaxPositionSteps) {
+    allMotorsSliderDir = -1;
+  } else {
+    allMotorsSliderDir = 1;
+  }
+  mode = Mode::AllMotorsControl;
   lastDisplayUpdateMs = 0;
 }
 
@@ -125,6 +155,7 @@ void handleMenu() {
       case 0: enterMotor1(); break;
       case 1: enterMotor2(); break;
       case 2: enterMotor3(); break;
+      case 3: enterAllMotors(); break;
     }
   }
   // Long-press has no meaning in the menu — drain it so it doesn't
@@ -194,14 +225,49 @@ void handleMotor3() {
   }
 }
 
+void handleAllMotors() {
+  if (encoder.consumeShortPress()) {
+    enterMenu();
+    return;
+  }
+  // Encoder dial is inert in this mode — drain both button events so a
+  // hold-through-entry doesn't fire later.
+  encoder.consumeLongPress();
+
+  // Slider: bounce. Flip direction once the carriage reaches either
+  // soft bound; the motor's own update() will already have stopped it
+  // there, and the next loop iteration will start it moving back.
+  long sliderPos = sliderMotor1.positionSteps();
+  if (allMotorsSliderDir > 0 && sliderPos >= SliderMotor1::kMaxPositionSteps) {
+    allMotorsSliderDir = -1;
+  } else if (allMotorsSliderDir < 0 && sliderPos <= SliderMotor1::kMinPositionSteps) {
+    allMotorsSliderDir = 1;
+  }
+  sliderMotor1.update(allMotorsSliderDir * kAllMotorsSliderSpeed, limitSwitch);
+
+  // Pan and Tilt: continuous CW. Wrap the step counter modulo the soft
+  // ceiling so the ISR's bounds check keeps passing.
+  panMotor2.update(kAllMotorsPanSpeed);
+  if (panMotor2.positionSteps() >=
+      PanMotor2::kMaxPositionSteps - kAllMotorsWrapMarginSteps) {
+    panMotor2.wrapPosition();
+  }
+  tiltMotor3.update(kAllMotorsTiltSpeed);
+  if (tiltMotor3.positionSteps() >=
+      TiltMotor3::kMaxPositionSteps - kAllMotorsWrapMarginSteps) {
+    tiltMotor3.wrapPosition();
+  }
+}
+
 void loop() {
   encoder.update();
 
   switch (mode) {
-    case Mode::Menu:          handleMenu();   break;
-    case Mode::Motor1Control: handleMotor1(); break;
-    case Mode::Motor2Control: handleMotor2(); break;
-    case Mode::Motor3Control: handleMotor3(); break;
+    case Mode::Menu:             handleMenu();      break;
+    case Mode::Motor1Control:    handleMotor1();    break;
+    case Mode::Motor2Control:    handleMotor2();    break;
+    case Mode::Motor3Control:    handleMotor3();    break;
+    case Mode::AllMotorsControl: handleAllMotors(); break;
   }
 
   if (millis() - lastDisplayUpdateMs >= kDisplayIntervalMs) {
@@ -218,6 +284,12 @@ void loop() {
         break;
       case Mode::Motor3Control:
         oled.showMotor3Status(encoder.position(), tiltMotor3.positionDegrees());
+        break;
+      case Mode::AllMotorsControl:
+        oled.showAllMotorsStatus(sliderMotor1.positionMm(),
+                                 panMotor2.positionDegrees(),
+                                 tiltMotor3.positionDegrees(),
+                                 limitSwitch.engaged());
         break;
     }
     lastDisplayUpdateMs = millis();

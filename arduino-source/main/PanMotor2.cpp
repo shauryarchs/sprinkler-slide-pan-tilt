@@ -34,6 +34,12 @@ void PanMotor2::stop() {
   enabled_ = false;
 }
 
+void PanMotor2::wrapPosition() {
+  portENTER_CRITICAL(&mux_);
+  position_ -= kMaxPositionSteps;
+  portEXIT_CRITICAL(&mux_);
+}
+
 long PanMotor2::positionDegrees() const {
   long pos = position_;
   return (pos * kMaxAngleDeg + kMaxPositionSteps / 2) / kMaxPositionSteps;
