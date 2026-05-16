@@ -166,8 +166,8 @@ void Display::showMotor3Status(int dial, long posDeg) {
   display_.display();
 }
 
-void Display::showAllMotorsStatus(long sliderMm, long panDeg, long tiltDeg,
-                                  bool limitEngaged) {
+void Display::showAllMotorsStatus(int sliderSpeed, long sliderMm, long panDeg,
+                                  long tiltDeg, bool limitEngaged) {
   if (!ok_) return;
   display_.clearDisplay();
   display_.setTextColor(SSD1306_WHITE);
@@ -192,8 +192,10 @@ void Display::showAllMotorsStatus(long sliderMm, long panDeg, long tiltDeg,
   display_.print(F(" deg"));
 
   display_.setCursor(0, 44);
-  display_.print(F("Limit: "));
-  display_.print(limitEngaged ? F("LOW (hit)") : F("HIGH"));
+  display_.print(F("Spd: "));
+  display_.print(sliderSpeed);
+  display_.print(F("  Lmt: "));
+  display_.print(limitEngaged ? F("LOW") : F("HI"));
 
   display_.setCursor(0, 56);
   display_.print(F("By, Shaurya Varshnay"));
