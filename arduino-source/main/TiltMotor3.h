@@ -24,6 +24,10 @@ class TiltMotor3 {
   static constexpr unsigned long kStepIntervalMinUs = 120;
   static constexpr unsigned long kStepIntervalMaxUs = 3000;
 
+  // Step interval used by stepBy() — slow enough to look like deliberate
+  // positioning while still feeling responsive (~12.5°/s at 1°/click).
+  static constexpr unsigned long kSetupStepIntervalUs = 500;
+
   static constexpr int kDirCw = LOW;
   static constexpr int kDirCcw = HIGH;
   static constexpr int kEncoderRange = 20;
@@ -35,6 +39,18 @@ class TiltMotor3 {
   void begin();
   void update(int dial);
   void stop();
+
+  // Synchronously issue |delta| step pulses in the direction implied by
+  // delta's sign (positive = CW). Bypasses the soft bounds — intended
+  // for the one-time post-home setup where the user is dialing the
+  // motor to its desired starting angle. Disables ISR-driven stepping
+  // for the duration of the burst so STEP/DIR aren't being driven from
+  // two places at once.
+  void stepBy(int delta);
+
+  // Atomically reset position_ to zero. Call after the user confirms the
+  // setup position so the soft bounds re-anchor around the new origin.
+  void zeroPosition();
 
   long positionSteps() const { return position_; }
   long positionDegrees() const;

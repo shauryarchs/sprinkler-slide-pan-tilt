@@ -5,7 +5,7 @@
 // Second TMC2209-driven stepper. Same step/dir interface as SliderMotor1
 // but no limit switch and no homing — the motor is assumed to be at "0°"
 // at boot, so it must be mechanically aligned before power-up. Travel
-// is bounded in software to ±360° around the boot reference (so 720° of
+// is bounded in software to ±105° around the boot reference (so 210° of
 // total swing).
 //
 // Uses its own hardware timer (timer 1) for step generation, mirroring
@@ -14,20 +14,24 @@
 //
 // Assumes the TMC2209 MS pins are configured for 1/32 microstepping,
 // giving 200 * 32 = 6400 microsteps per motor revolution. With a 1:1
-// shaft coupling that's 6400/360 microsteps/degree, so 360° is 6400
-// microsteps. Adjust kStepsPerRev if your microstepping or gearing
-// differs.
+// shaft coupling that's 6400/360 microsteps/degree, so 105° is 1866
+// microsteps (integer-truncated from 1866.67; ~0.04° short of 105°).
+// Adjust kStepsPerRev if your microstepping or gearing differs.
 class PanMotor2 {
  public:
   static constexpr long kStepsPerRev = 6400;
-  static constexpr long kMaxAngleDeg = 360;
+  static constexpr long kMaxAngleDeg = 105;
   static constexpr long kMaxPositionSteps =
-      kStepsPerRev * kMaxAngleDeg / 360;  // 6400
+      kStepsPerRev * kMaxAngleDeg / 360;  // 1866
   static constexpr long kMinPositionSteps = -kMaxPositionSteps;
 
   static constexpr unsigned int kStepPulseWidthUs = 3;
   static constexpr unsigned long kStepIntervalMinUs = 120;   // fastest
   static constexpr unsigned long kStepIntervalMaxUs = 3000;  // slowest
+
+  // Step interval used by stepBy() — slow enough to look like deliberate
+  // positioning while still feeling responsive (~12.5°/s at 1°/click).
+  static constexpr unsigned long kSetupStepIntervalUs = 500;
 
   static constexpr int kDirCw = LOW;
   static constexpr int kDirCcw = HIGH;
@@ -42,6 +46,18 @@ class PanMotor2 {
   // based on the signed dial value.
   void update(int dial);
   void stop();
+
+  // Synchronously issue |delta| step pulses in the direction implied by
+  // delta's sign (positive = CW). Bypasses the soft bounds — intended
+  // for the one-time post-home setup where the user is dialing the
+  // motor to its desired starting angle. Disables ISR-driven stepping
+  // for the duration of the burst so STEP/DIR aren't being driven from
+  // two places at once.
+  void stepBy(int delta);
+
+  // Atomically reset position_ to zero. Call after the user confirms the
+  // setup position so the soft bounds re-anchor around the new origin.
+  void zeroPosition();
 
   long positionSteps() const { return position_; }
   long positionDegrees() const;

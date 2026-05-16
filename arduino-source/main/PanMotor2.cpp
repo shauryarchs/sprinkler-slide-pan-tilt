@@ -34,6 +34,42 @@ void PanMotor2::stop() {
   enabled_ = false;
 }
 
+void PanMotor2::stepBy(int delta) {
+  if (delta == 0) return;
+
+  // Ensure ISR-driven stepping is off and any in-flight pulse has
+  // finished, so we own STEP/DIR while we drive them by hand.
+  enabled_ = false;
+  delayMicroseconds(kTimerPeriodUs + 5);
+
+  uint8_t newDir = (delta > 0) ? kDirCw : kDirCcw;
+  if (newDir != dir_) {
+    digitalWrite(dirPin_, newDir);
+    dir_ = newDir;
+    delayMicroseconds(5);  // DIR-to-STEP setup
+  }
+
+  int count = (delta > 0) ? delta : -delta;
+  for (int i = 0; i < count; i++) {
+    digitalWrite(stepPin_, HIGH);
+    delayMicroseconds(kStepPulseWidthUs);
+    digitalWrite(stepPin_, LOW);
+    delayMicroseconds(kSetupStepIntervalUs);
+    portENTER_CRITICAL(&mux_);
+    if (newDir == kDirCw) position_++;
+    else position_--;
+    portEXIT_CRITICAL(&mux_);
+  }
+}
+
+void PanMotor2::zeroPosition() {
+  enabled_ = false;
+  delayMicroseconds(kTimerPeriodUs + 5);
+  portENTER_CRITICAL(&mux_);
+  position_ = 0;
+  portEXIT_CRITICAL(&mux_);
+}
+
 long PanMotor2::positionDegrees() const {
   long pos = position_;
   return (pos * kMaxAngleDeg + kMaxPositionSteps / 2) / kMaxPositionSteps;
@@ -52,7 +88,7 @@ void PanMotor2::update(int dial) {
   long pos = position_;
 
   // Bounds: motor2 lives in [kMinPositionSteps, kMaxPositionSteps], i.e.
-  // ±360° around the boot reference. No drift recovery — there's no
+  // ±105° around the boot reference. No drift recovery — there's no
   // limit switch to act as a reference.
   if (desiredDir == kDirCw && pos >= kMaxPositionSteps) wantMove = false;
   if (desiredDir == kDirCcw && pos <= kMinPositionSteps) wantMove = false;
