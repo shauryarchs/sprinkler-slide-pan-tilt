@@ -32,12 +32,6 @@ void TiltMotor3::stop() {
   enabled_ = false;
 }
 
-void TiltMotor3::wrapPosition() {
-  portENTER_CRITICAL(&mux_);
-  position_ -= kMaxPositionSteps;
-  portEXIT_CRITICAL(&mux_);
-}
-
 long TiltMotor3::positionDegrees() const {
   long pos = position_;
   return (pos * kMaxAngleDeg + kMaxPositionSteps / 2) / kMaxPositionSteps;
@@ -56,7 +50,7 @@ void TiltMotor3::update(int dial) {
   long pos = position_;
 
   if (desiredDir == kDirCw && pos >= kMaxPositionSteps) wantMove = false;
-  if (desiredDir == kDirCcw && pos <= 0) wantMove = false;
+  if (desiredDir == kDirCcw && pos <= kMinPositionSteps) wantMove = false;
 
   if (wantMove) {
     if (desiredDir != dir_) {
@@ -95,7 +89,7 @@ void IRAM_ATTR TiltMotor3::onTimer() {
   if (!enabled_) return;
 
   if (dir_ == kDirCw && position_ >= kMaxPositionSteps) return;
-  if (dir_ == kDirCcw && position_ <= 0) return;
+  if (dir_ == kDirCcw && position_ <= kMinPositionSteps) return;
 
   if (stepCountdownUs_ <= kTimerPeriodUs) {
     digitalWrite(stepPin_, HIGH);

@@ -123,7 +123,7 @@ void Display::showMotor2Status(int dial, long posDeg) {
   display_.print(F(" deg"));
 
   display_.setCursor(0, 44);
-  display_.print(F("Pan-Motor2 [0-360]"));
+  display_.print(F("Pan-Motor2 [+/-360]"));
 
   display_.setCursor(0, 56);
   display_.print(F("By, Shaurya Varshnay"));
@@ -158,7 +158,7 @@ void Display::showMotor3Status(int dial, long posDeg) {
   display_.print(F(" deg"));
 
   display_.setCursor(0, 44);
-  display_.print(F("Tilt-Motor3 [0-360]"));
+  display_.print(F("Tilt-Motor3 [+/-360]"));
 
   display_.setCursor(0, 56);
   display_.print(F("By, Shaurya Varshnay"));
