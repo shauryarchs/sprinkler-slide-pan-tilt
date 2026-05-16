@@ -1,11 +1,15 @@
+#include <WiFi.h>
 #include <Wire.h>
 
+#include "AppState.h"
 #include "Display.h"
 #include "Encoder.h"
 #include "LimitSwitch.h"
 #include "PanMotor2.h"
 #include "SliderMotor1.h"
+#include "StatePusher.h"
 #include "TiltMotor3.h"
+#include "secrets.h"
 
 // Pin assignments use Arduino Nano ESP32 silkscreen labels.
 // The core resolves them to the right ESP32-S3 GPIOs.
@@ -34,27 +38,25 @@ SliderMotor1 sliderMotor1(pins::kMotor1Dir, pins::kMotor1Step);
 PanMotor2 panMotor2(pins::kMotor2Dir, pins::kMotor2Step);
 TiltMotor3 tiltMotor3(pins::kMotor3Dir, pins::kMotor3Step);
 Display oled;
+StatePusher statePusher(sliderMotor1, panMotor2, tiltMotor3, encoder, limitSwitch);
 
 // UI state machine: the menu is the resting screen; selecting an item
 // hands the encoder over to that motor's control logic. Short-press
 // returns to the menu (and stops the active motor).
-enum class Mode {
-  Menu,
-  Motor1Control,
-  Motor2Control,
-  Motor3Control,
-  AllMotorsControl,
-  // Post-boot-home, one-shot Pan/Tilt zero-position setup. Each click of
-  // the encoder steps the active motor by kSetupMicroStepsPerClick
-  // microsteps; a short-press locks the current position as the new "0"
-  // reference and advances. After Tilt setup the device drops into the
-  // menu and these states are never re-entered (re-home from Motor 1
-  // does not re-prompt).
-  PanSetup,
-  TiltSetup,
-};
+//
+// The Mode enum + the `mode`, `menuIndex`, and `sliderHomed` globals
+// live here (in main.ino) but are declared in AppState.h so the
+// background StatePusher task can read them without a circular include.
+//
+// Post-boot-home modes (PanSetup, TiltSetup) are one-shot Pan/Tilt
+// zero-position setup states: each click of the encoder steps the
+// active motor by kSetupMicroStepsPerClick microsteps; a short-press
+// locks the current position as the new "0" reference and advances.
+// After Tilt setup the device drops into the menu and these states
+// are never re-entered (re-home from Motor 1 does not re-prompt).
 Mode mode = Mode::Menu;
 int menuIndex = 0;
+bool sliderHomed = false;
 const int kMenuItemCount = 4;
 
 // "All motors" demo mode. All three motors bounce between their soft
@@ -129,6 +131,7 @@ void rehome() {
   encoder.suspend();
   oled.showHomingMessage();
   sliderMotor1.home(limitSwitch);
+  sliderHomed = true;
   encoder.reset();
   encoder.resume();
   encoder.syncSwState();
@@ -149,9 +152,19 @@ void setup() {
   // its mechanical alignment at power-on.
   oled.showHomingMessage();
   sliderMotor1.home(limitSwitch);
+  sliderHomed = true;
 
   encoder.begin();
   encoder.syncSwState();
+
+  // Start Wi-Fi in station mode and kick off the background state-push
+  // task. Wi-Fi connect is non-blocking — if the network is down the
+  // device keeps working locally; StatePusher's pushOnce() short-circuits
+  // when WiFi.status() != WL_CONNECTED, and the next heartbeat just
+  // tries again.
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  statePusher.begin(EMBER_API_HOST);
 
   // After boot homing, prompt the user to set the Pan and Tilt initial
   // positions before handing control over to the main menu. This runs
