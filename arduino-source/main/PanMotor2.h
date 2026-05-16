@@ -5,7 +5,7 @@
 // Second TMC2209-driven stepper. Same step/dir interface as SliderMotor1
 // but no limit switch and no homing — the motor is assumed to be at "0°"
 // at boot, so it must be mechanically aligned before power-up. Travel
-// is bounded in software to [0°, 180°].
+// is bounded in software to [0°, 360°].
 //
 // Uses its own hardware timer (timer 1) for step generation, mirroring
 // the SliderMotor1 class so a blocking display.display() in the main
@@ -13,15 +13,15 @@
 //
 // Assumes the TMC2209 MS pins are configured for 1/32 microstepping,
 // giving 200 * 32 = 6400 microsteps per motor revolution. With a 1:1
-// shaft coupling that's 6400/360 microsteps/degree, so 180° is 3200
+// shaft coupling that's 6400/360 microsteps/degree, so 360° is 6400
 // microsteps. Adjust kStepsPerRev if your microstepping or gearing
 // differs.
 class PanMotor2 {
  public:
   static constexpr long kStepsPerRev = 6400;
-  static constexpr long kMaxAngleDeg = 180;
+  static constexpr long kMaxAngleDeg = 360;
   static constexpr long kMaxPositionSteps =
-      kStepsPerRev * kMaxAngleDeg / 360;  // 3200
+      kStepsPerRev * kMaxAngleDeg / 360;  // 6400
 
   static constexpr unsigned int kStepPulseWidthUs = 3;
   static constexpr unsigned long kStepIntervalMinUs = 120;   // fastest
