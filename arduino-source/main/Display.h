@@ -24,9 +24,10 @@ class Display {
   void showMotor1Status(int dial, long posMm, bool limitEngaged);
   void showMotor2Status(int dial, long posDeg);
   void showMotor3Status(int dial, long posDeg);
-  // Status screen for the "all motors" demo mode.
-  void showAllMotorsStatus(long sliderMm, long panDeg, long tiltDeg,
-                           bool limitEngaged);
+  // Status screen for the "all motors" demo mode. sliderSpeed is the
+  // current dial-driven speed magnitude (0..Encoder::kRange).
+  void showAllMotorsStatus(int sliderSpeed, long sliderMm, long panDeg,
+                           long tiltDeg, bool limitEngaged);
 
  private:
   Adafruit_SSD1306 display_;
