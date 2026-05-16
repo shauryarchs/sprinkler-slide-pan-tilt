@@ -5,7 +5,8 @@
 // Second TMC2209-driven stepper. Same step/dir interface as SliderMotor1
 // but no limit switch and no homing — the motor is assumed to be at "0°"
 // at boot, so it must be mechanically aligned before power-up. Travel
-// is bounded in software to [0°, 360°].
+// is bounded in software to ±360° around the boot reference (so 720° of
+// total swing).
 //
 // Uses its own hardware timer (timer 1) for step generation, mirroring
 // the SliderMotor1 class so a blocking display.display() in the main
@@ -22,6 +23,7 @@ class PanMotor2 {
   static constexpr long kMaxAngleDeg = 360;
   static constexpr long kMaxPositionSteps =
       kStepsPerRev * kMaxAngleDeg / 360;  // 6400
+  static constexpr long kMinPositionSteps = -kMaxPositionSteps;
 
   static constexpr unsigned int kStepPulseWidthUs = 3;
   static constexpr unsigned long kStepIntervalMinUs = 120;   // fastest
@@ -40,11 +42,6 @@ class PanMotor2 {
   // based on the signed dial value.
   void update(int dial);
   void stop();
-
-  // Subtract kMaxPositionSteps from the step counter without stopping
-  // the timer. Use from a continuous-rotation mode to keep position_
-  // from crossing the ISR's soft-ceiling check.
-  void wrapPosition();
 
   long positionSteps() const { return position_; }
   long positionDegrees() const;

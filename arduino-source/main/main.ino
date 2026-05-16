@@ -56,12 +56,11 @@ const int kMenuItemCount = 4;
 const int kAllMotorsSliderSpeed = 15;
 const int kAllMotorsPanSpeed = 12;
 const int kAllMotorsTiltSpeed = 12;
-// Wrap Pan/Tilt back below the soft ceiling this many steps early so
-// the ISR's hard backstop never trips during a display.display() block.
-const long kAllMotorsWrapMarginSteps = 200;
-// Bounce state for the slider in all-motors mode. +1 = heading toward
+// Bounce state for each motor in all-motors mode. +1 = heading toward
 // the soft ceiling, -1 = heading toward the soft floor.
 int allMotorsSliderDir = 1;
+int allMotorsPanDir = 1;
+int allMotorsTiltDir = 1;
 
 unsigned long lastDisplayUpdateMs = 0;
 
@@ -99,14 +98,14 @@ void enterMotor3() {
 void enterAllMotors() {
   encoder.reset();
   encoder.syncSwState();
-  // Pick a slider direction that doesn't stall against the ceiling on
-  // entry. If the carriage already sits at the soft ceiling, start by
-  // heading back; otherwise head out.
-  if (sliderMotor1.positionSteps() >= SliderMotor1::kMaxPositionSteps) {
-    allMotorsSliderDir = -1;
-  } else {
-    allMotorsSliderDir = 1;
-  }
+  // Pick a starting direction for each motor that doesn't stall against
+  // the ceiling on entry — if already at the ceiling, head back.
+  allMotorsSliderDir =
+      (sliderMotor1.positionSteps() >= SliderMotor1::kMaxPositionSteps) ? -1 : 1;
+  allMotorsPanDir =
+      (panMotor2.positionSteps() >= PanMotor2::kMaxPositionSteps) ? -1 : 1;
+  allMotorsTiltDir =
+      (tiltMotor3.positionSteps() >= TiltMotor3::kMaxPositionSteps) ? -1 : 1;
   mode = Mode::AllMotorsControl;
   lastDisplayUpdateMs = 0;
 }
@@ -197,12 +196,12 @@ void handleMotor2() {
   int dial = encoder.position();
   panMotor2.update(dial);
 
-  // Same auto-reset idea: at either end of the 0-180° range, snap the
+  // Same auto-reset idea: at either end of the ±360° range, snap the
   // dial back to 0 so reversing is one click away.
   long posSteps = panMotor2.positionSteps();
   if (dial > 0 && posSteps >= PanMotor2::kMaxPositionSteps) {
     encoder.reset();
-  } else if (dial < 0 && posSteps <= 0) {
+  } else if (dial < 0 && posSteps <= PanMotor2::kMinPositionSteps) {
     encoder.reset();
   }
 }
@@ -220,7 +219,7 @@ void handleMotor3() {
   long posSteps = tiltMotor3.positionSteps();
   if (dial > 0 && posSteps >= TiltMotor3::kMaxPositionSteps) {
     encoder.reset();
-  } else if (dial < 0 && posSteps <= 0) {
+  } else if (dial < 0 && posSteps <= TiltMotor3::kMinPositionSteps) {
     encoder.reset();
   }
 }
@@ -245,18 +244,23 @@ void handleAllMotors() {
   }
   sliderMotor1.update(allMotorsSliderDir * kAllMotorsSliderSpeed, limitSwitch);
 
-  // Pan and Tilt: continuous CW. Wrap the step counter modulo the soft
-  // ceiling so the ISR's bounds check keeps passing.
-  panMotor2.update(kAllMotorsPanSpeed);
-  if (panMotor2.positionSteps() >=
-      PanMotor2::kMaxPositionSteps - kAllMotorsWrapMarginSteps) {
-    panMotor2.wrapPosition();
+  // Pan: bounce between ±360° around the boot reference.
+  long panPos = panMotor2.positionSteps();
+  if (allMotorsPanDir > 0 && panPos >= PanMotor2::kMaxPositionSteps) {
+    allMotorsPanDir = -1;
+  } else if (allMotorsPanDir < 0 && panPos <= PanMotor2::kMinPositionSteps) {
+    allMotorsPanDir = 1;
   }
-  tiltMotor3.update(kAllMotorsTiltSpeed);
-  if (tiltMotor3.positionSteps() >=
-      TiltMotor3::kMaxPositionSteps - kAllMotorsWrapMarginSteps) {
-    tiltMotor3.wrapPosition();
+  panMotor2.update(allMotorsPanDir * kAllMotorsPanSpeed);
+
+  // Tilt: same bounce, same range.
+  long tiltPos = tiltMotor3.positionSteps();
+  if (allMotorsTiltDir > 0 && tiltPos >= TiltMotor3::kMaxPositionSteps) {
+    allMotorsTiltDir = -1;
+  } else if (allMotorsTiltDir < 0 && tiltPos <= TiltMotor3::kMinPositionSteps) {
+    allMotorsTiltDir = 1;
   }
+  tiltMotor3.update(allMotorsTiltDir * kAllMotorsTiltSpeed);
 }
 
 void loop() {

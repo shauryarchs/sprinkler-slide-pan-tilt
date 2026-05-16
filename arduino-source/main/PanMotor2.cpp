@@ -34,12 +34,6 @@ void PanMotor2::stop() {
   enabled_ = false;
 }
 
-void PanMotor2::wrapPosition() {
-  portENTER_CRITICAL(&mux_);
-  position_ -= kMaxPositionSteps;
-  portEXIT_CRITICAL(&mux_);
-}
-
 long PanMotor2::positionDegrees() const {
   long pos = position_;
   return (pos * kMaxAngleDeg + kMaxPositionSteps / 2) / kMaxPositionSteps;
@@ -57,10 +51,11 @@ void PanMotor2::update(int dial) {
 
   long pos = position_;
 
-  // Bounds: motor2 lives in [0, kMaxPositionSteps]. No drift recovery —
-  // there's no limit switch to act as a reference.
+  // Bounds: motor2 lives in [kMinPositionSteps, kMaxPositionSteps], i.e.
+  // ±360° around the boot reference. No drift recovery — there's no
+  // limit switch to act as a reference.
   if (desiredDir == kDirCw && pos >= kMaxPositionSteps) wantMove = false;
-  if (desiredDir == kDirCcw && pos <= 0) wantMove = false;
+  if (desiredDir == kDirCcw && pos <= kMinPositionSteps) wantMove = false;
 
   if (wantMove) {
     if (desiredDir != dir_) {
@@ -102,7 +97,7 @@ void IRAM_ATTR PanMotor2::onTimer() {
   // the ISR keeps running during display.display() blocks, so without
   // this check the motor could overrun while the loop is paused.
   if (dir_ == kDirCw && position_ >= kMaxPositionSteps) return;
-  if (dir_ == kDirCcw && position_ <= 0) return;
+  if (dir_ == kDirCcw && position_ <= kMinPositionSteps) return;
 
   if (stepCountdownUs_ <= kTimerPeriodUs) {
     digitalWrite(stepPin_, HIGH);

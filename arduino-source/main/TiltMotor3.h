@@ -3,11 +3,11 @@
 #include <Arduino.h>
 
 // Third TMC2209-driven stepper. Same behavior as PanMotor2 — a bounded
-// [0°, 360°] rotary motor with no limit switch and no homing — just
-// running off its own hardware timer (timer 2) and on its own DIR/STEP
-// pins (D10/D11 by default; the .ino wires them up). Position 0 is
-// wherever the motor happens to be at boot, so it must be mechanically
-// aligned before power-on.
+// ±360°-around-boot rotary motor (720° of total swing) with no limit
+// switch and no homing — just running off its own hardware timer
+// (timer 2) and on its own DIR/STEP pins (D10/D11 by default; the .ino
+// wires them up). Position 0 is wherever the motor happens to be at
+// boot, so it must be mechanically aligned before power-on.
 //
 // Microstepping assumption matches SliderMotor1 / PanMotor2: 1/32 → 6400
 // microsteps per revolution → 6400 microsteps for 360°. Edit
@@ -18,6 +18,7 @@ class TiltMotor3 {
   static constexpr long kMaxAngleDeg = 360;
   static constexpr long kMaxPositionSteps =
       kStepsPerRev * kMaxAngleDeg / 360;  // 6400
+  static constexpr long kMinPositionSteps = -kMaxPositionSteps;
 
   static constexpr unsigned int kStepPulseWidthUs = 3;
   static constexpr unsigned long kStepIntervalMinUs = 120;
@@ -34,11 +35,6 @@ class TiltMotor3 {
   void begin();
   void update(int dial);
   void stop();
-
-  // Subtract kMaxPositionSteps from the step counter without stopping
-  // the timer. Use from a continuous-rotation mode to keep position_
-  // from crossing the ISR's soft-ceiling check.
-  void wrapPosition();
 
   long positionSteps() const { return position_; }
   long positionDegrees() const;
