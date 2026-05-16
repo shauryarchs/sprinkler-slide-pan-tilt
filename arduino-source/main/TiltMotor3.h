@@ -35,6 +35,11 @@ class TiltMotor3 {
   void update(int dial);
   void stop();
 
+  // Subtract kMaxPositionSteps from the step counter without stopping
+  // the timer. Use from a continuous-rotation mode to keep position_
+  // from crossing the ISR's soft-ceiling check.
+  void wrapPosition();
+
   long positionSteps() const { return position_; }
   long positionDegrees() const;
 

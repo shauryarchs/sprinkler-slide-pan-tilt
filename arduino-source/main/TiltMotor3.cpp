@@ -32,6 +32,12 @@ void TiltMotor3::stop() {
   enabled_ = false;
 }
 
+void TiltMotor3::wrapPosition() {
+  portENTER_CRITICAL(&mux_);
+  position_ -= kMaxPositionSteps;
+  portEXIT_CRITICAL(&mux_);
+}
+
 long TiltMotor3::positionDegrees() const {
   long pos = position_;
   return (pos * kMaxAngleDeg + kMaxPositionSteps / 2) / kMaxPositionSteps;
