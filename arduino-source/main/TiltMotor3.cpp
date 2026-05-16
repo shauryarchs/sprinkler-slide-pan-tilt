@@ -32,6 +32,40 @@ void TiltMotor3::stop() {
   enabled_ = false;
 }
 
+void TiltMotor3::stepBy(int delta) {
+  if (delta == 0) return;
+
+  enabled_ = false;
+  delayMicroseconds(kTimerPeriodUs + 5);
+
+  uint8_t newDir = (delta > 0) ? kDirCw : kDirCcw;
+  if (newDir != dir_) {
+    digitalWrite(dirPin_, newDir);
+    dir_ = newDir;
+    delayMicroseconds(5);
+  }
+
+  int count = (delta > 0) ? delta : -delta;
+  for (int i = 0; i < count; i++) {
+    digitalWrite(stepPin_, HIGH);
+    delayMicroseconds(kStepPulseWidthUs);
+    digitalWrite(stepPin_, LOW);
+    delayMicroseconds(kSetupStepIntervalUs);
+    portENTER_CRITICAL(&mux_);
+    if (newDir == kDirCw) position_++;
+    else position_--;
+    portEXIT_CRITICAL(&mux_);
+  }
+}
+
+void TiltMotor3::zeroPosition() {
+  enabled_ = false;
+  delayMicroseconds(kTimerPeriodUs + 5);
+  portENTER_CRITICAL(&mux_);
+  position_ = 0;
+  portEXIT_CRITICAL(&mux_);
+}
+
 long TiltMotor3::positionDegrees() const {
   long pos = position_;
   return (pos * kMaxAngleDeg + kMaxPositionSteps / 2) / kMaxPositionSteps;

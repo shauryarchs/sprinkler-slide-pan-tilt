@@ -44,6 +44,14 @@ enum class Mode {
   Motor2Control,
   Motor3Control,
   AllMotorsControl,
+  // Post-boot-home, one-shot Pan/Tilt zero-position setup. Each click of
+  // the encoder steps the active motor by kSetupMicroStepsPerClick
+  // microsteps; a short-press locks the current position as the new "0"
+  // reference and advances. After Tilt setup the device drops into the
+  // menu and these states are never re-entered (re-home from Motor 1
+  // does not re-prompt).
+  PanSetup,
+  TiltSetup,
 };
 Mode mode = Mode::Menu;
 int menuIndex = 0;
@@ -61,6 +69,11 @@ const int kAllMotorsTiltSpeed = 12;
 int allMotorsSliderDir = 1;
 int allMotorsPanDir = 1;
 int allMotorsTiltDir = 1;
+
+// Microsteps applied per encoder click during PanSetup/TiltSetup. The
+// motors run at 6400 microsteps/rev = 17.78 microsteps/° with a 1:1
+// shaft coupling, so 18 microsteps ≈ 1° per click.
+const int kSetupMicroStepsPerClick = 18;
 
 unsigned long lastDisplayUpdateMs = 0;
 
@@ -140,7 +153,11 @@ void setup() {
   encoder.begin();
   encoder.syncSwState();
 
-  mode = Mode::Menu;
+  // After boot homing, prompt the user to set the Pan and Tilt initial
+  // positions before handing control over to the main menu. This runs
+  // once per power-up; re-homing later (long-press in Motor 1) does not
+  // re-enter setup.
+  mode = Mode::PanSetup;
 }
 
 void handleMenu() {
@@ -196,7 +213,7 @@ void handleMotor2() {
   int dial = encoder.position();
   panMotor2.update(dial);
 
-  // Same auto-reset idea: at either end of the ±360° range, snap the
+  // Same auto-reset idea: at either end of the ±105° range, snap the
   // dial back to 0 so reversing is one click away.
   long posSteps = panMotor2.positionSteps();
   if (dial > 0 && posSteps >= PanMotor2::kMaxPositionSteps) {
@@ -250,7 +267,7 @@ void handleAllMotors() {
   }
   sliderMotor1.update(allMotorsSliderDir * sliderSpeed, limitSwitch);
 
-  // Pan: bounce between ±360° around the boot reference.
+  // Pan: bounce between ±105° around the boot reference.
   long panPos = panMotor2.positionSteps();
   if (allMotorsPanDir > 0 && panPos >= PanMotor2::kMaxPositionSteps) {
     allMotorsPanDir = -1;
@@ -269,6 +286,41 @@ void handleAllMotors() {
   tiltMotor3.update(allMotorsTiltDir * kAllMotorsTiltSpeed);
 }
 
+void handlePanSetup() {
+  if (encoder.consumeShortPress()) {
+    panMotor2.zeroPosition();
+    encoder.reset();
+    encoder.syncSwState();
+    mode = Mode::TiltSetup;
+    lastDisplayUpdateMs = 0;
+    return;
+  }
+  // Long-press has no meaning in setup — drain it.
+  encoder.consumeLongPress();
+
+  int delta = encoder.consumeDelta();
+  if (delta != 0) {
+    panMotor2.stepBy(delta * kSetupMicroStepsPerClick);
+  }
+}
+
+void handleTiltSetup() {
+  if (encoder.consumeShortPress()) {
+    tiltMotor3.zeroPosition();
+    encoder.reset();
+    encoder.syncSwState();
+    mode = Mode::Menu;
+    lastDisplayUpdateMs = 0;
+    return;
+  }
+  encoder.consumeLongPress();
+
+  int delta = encoder.consumeDelta();
+  if (delta != 0) {
+    tiltMotor3.stepBy(delta * kSetupMicroStepsPerClick);
+  }
+}
+
 void loop() {
   encoder.update();
 
@@ -278,6 +330,8 @@ void loop() {
     case Mode::Motor2Control:    handleMotor2();    break;
     case Mode::Motor3Control:    handleMotor3();    break;
     case Mode::AllMotorsControl: handleAllMotors(); break;
+    case Mode::PanSetup:         handlePanSetup();  break;
+    case Mode::TiltSetup:        handleTiltSetup(); break;
   }
 
   if (millis() - lastDisplayUpdateMs >= kDisplayIntervalMs) {
@@ -305,6 +359,12 @@ void loop() {
                                  limitSwitch.engaged());
         break;
       }
+      case Mode::PanSetup:
+        oled.showPanSetupScreen(panMotor2.positionDegrees());
+        break;
+      case Mode::TiltSetup:
+        oled.showTiltSetupScreen(tiltMotor3.positionDegrees());
+        break;
     }
     lastDisplayUpdateMs = millis();
   }

@@ -123,7 +123,7 @@ void Display::showMotor2Status(int dial, long posDeg) {
   display_.print(F(" deg"));
 
   display_.setCursor(0, 44);
-  display_.print(F("Pan-Motor2 [+/-360]"));
+  display_.print(F("Pan-Motor2 [+/-105]"));
 
   display_.setCursor(0, 56);
   display_.print(F("By, Shaurya Varshnay"));
@@ -164,6 +164,45 @@ void Display::showMotor3Status(int dial, long posDeg) {
   display_.print(F("By, Shaurya Varshnay"));
 
   display_.display();
+}
+
+namespace {
+void renderSetupScreen(Adafruit_SSD1306& display_, const __FlashStringHelper* title,
+                       long offsetDeg) {
+  display_.clearDisplay();
+  display_.setTextColor(SSD1306_WHITE);
+  display_.setTextSize(1);
+
+  display_.setCursor(0, 0);
+  display_.println(title);
+
+  display_.setCursor(0, 14);
+  display_.println(F("Spin to rotate"));
+
+  display_.setCursor(0, 26);
+  display_.println(F("Press to set 0"));
+
+  display_.setCursor(0, 44);
+  display_.print(F("Offset: "));
+  if (offsetDeg > 0) display_.print('+');
+  display_.print(offsetDeg);
+  display_.print(F(" deg"));
+
+  display_.setCursor(0, 56);
+  display_.print(F("By, Shaurya Varshnay"));
+
+  display_.display();
+}
+}  // namespace
+
+void Display::showPanSetupScreen(long offsetDeg) {
+  if (!ok_) return;
+  renderSetupScreen(display_, F("Set Pan Start"), offsetDeg);
+}
+
+void Display::showTiltSetupScreen(long offsetDeg) {
+  if (!ok_) return;
+  renderSetupScreen(display_, F("Set Tilt Start"), offsetDeg);
 }
 
 void Display::showAllMotorsStatus(int sliderSpeed, long sliderMm, long panDeg,

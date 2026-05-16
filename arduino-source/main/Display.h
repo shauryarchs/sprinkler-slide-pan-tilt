@@ -28,6 +28,11 @@ class Display {
   // current dial-driven speed magnitude (0..Encoder::kRange).
   void showAllMotorsStatus(int sliderSpeed, long sliderMm, long panDeg,
                            long tiltDeg, bool limitEngaged);
+  // One-shot post-home setup screens. offsetDeg is the signed rotation
+  // (in degrees) the motor has accumulated since boot, displayed so the
+  // user has feedback while click-stepping the motor into position.
+  void showPanSetupScreen(long offsetDeg);
+  void showTiltSetupScreen(long offsetDeg);
 
  private:
   Adafruit_SSD1306 display_;
