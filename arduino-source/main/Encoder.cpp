@@ -52,6 +52,14 @@ void Encoder::reset() {
   interrupts();
 }
 
+void Encoder::set(int value) {
+  if (value > kRange) value = kRange;
+  if (value < -kRange) value = -kRange;
+  noInterrupts();
+  position_ = value;
+  interrupts();
+}
+
 void Encoder::update() {
   int reading = digitalRead(swPin_);
   if (reading != lastSwReading_) lastDebounceMs_ = millis();
