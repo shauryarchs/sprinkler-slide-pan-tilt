@@ -64,15 +64,16 @@ void StatePusher::run() {
 void StatePusher::pushOnce() {
   if (WiFi.status() != WL_CONNECTED) return;
 
-  char body[256];
+  char body[288];
   snprintf(body, sizeof(body),
            "{\"mode\":\"%s\",\"menuIndex\":%d,\"sliderMm\":%ld,"
            "\"panDeg\":%ld,\"tiltDeg\":%ld,\"dial\":%d,"
-           "\"limitEngaged\":%s,\"homed\":%s}",
+           "\"limitEngaged\":%s,\"homed\":%s,\"lastSeqAck\":%lu}",
            modeName(mode), menuIndex, slider_.positionMm(),
            pan_.positionDegrees(), tilt_.positionDegrees(), enc_.position(),
            limit_.engaged() ? "true" : "false",
-           sliderHomed ? "true" : "false");
+           sliderHomed ? "true" : "false",
+           lastSeqAck);
 
   String url = "https://";
   url += host_;

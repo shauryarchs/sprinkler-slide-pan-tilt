@@ -2,6 +2,7 @@
 #include <Wire.h>
 
 #include "AppState.h"
+#include "CommandPoller.h"
 #include "Display.h"
 #include "Encoder.h"
 #include "LimitSwitch.h"
@@ -39,6 +40,7 @@ PanMotor2 panMotor2(pins::kMotor2Dir, pins::kMotor2Step);
 TiltMotor3 tiltMotor3(pins::kMotor3Dir, pins::kMotor3Step);
 Display oled;
 StatePusher statePusher(sliderMotor1, panMotor2, tiltMotor3, encoder, limitSwitch);
+CommandPoller commandPoller;
 
 // UI state machine: the menu is the resting screen; selecting an item
 // hands the encoder over to that motor's control logic. Short-press
@@ -57,6 +59,7 @@ StatePusher statePusher(sliderMotor1, panMotor2, tiltMotor3, encoder, limitSwitc
 Mode mode = Mode::Menu;
 int menuIndex = 0;
 bool sliderHomed = false;
+volatile unsigned long lastSeqAck = 0;
 const int kMenuItemCount = 4;
 
 // "All motors" demo mode. All three motors bounce between their soft
@@ -165,6 +168,7 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   statePusher.begin(EMBER_API_HOST);
+  commandPoller.begin(EMBER_API_HOST);
 
   // After boot homing, prompt the user to set the Pan and Tilt initial
   // positions before handing control over to the main menu. This runs
@@ -334,8 +338,63 @@ void handleTiltSetup() {
   }
 }
 
+// Dispatch a command delivered by CommandPoller into the same handlers
+// the encoder uses. Runs only on the main loop thread, so it can freely
+// touch `mode`, the encoder ISR, etc.
+//
+// Conflict policy is last-write-wins: a remote `enterMode` takes effect
+// immediately even if the user is mid-spin; the next encoder click
+// would just transition again. setSliderSpeed re-anchors the encoder
+// dial, which the All Motors handler reads on each iteration. We
+// intentionally ignore PanSetup / TiltSetup target modes — that flow
+// is one-shot at boot and not exposed to the remote.
+void dispatchRemoteCommand(const RemoteCommand& cmd) {
+  switch (cmd.kind) {
+    case RemoteCmdKind::EnterMode:
+      switch (cmd.targetMode) {
+        case Mode::Menu:             enterMenu();      break;
+        case Mode::Motor1Control:    enterMotor1();    break;
+        case Mode::Motor2Control:    enterMotor2();    break;
+        case Mode::Motor3Control:    enterMotor3();    break;
+        case Mode::AllMotorsControl: enterAllMotors(); break;
+        default: break;
+      }
+      break;
+    case RemoteCmdKind::Rehome:
+      // rehome() suspends the encoder ISR, homes the slider, resumes.
+      // Safe to call from any mode; current mode is preserved.
+      rehome();
+      break;
+    case RemoteCmdKind::ZeroPan:
+      panMotor2.zeroPosition();
+      break;
+    case RemoteCmdKind::ZeroTilt:
+      tiltMotor3.zeroPosition();
+      break;
+    case RemoteCmdKind::SetSliderSpeed:
+      // Only meaningful in All Motors mode where |dial| drives slider
+      // speed. In other modes the encoder has different semantics
+      // (menu navigation, per-motor speed setpoint) and re-anchoring
+      // it would just surprise the user.
+      if (mode == Mode::AllMotorsControl) {
+        encoder.set(cmd.speed);
+      }
+      break;
+    default:
+      break;
+  }
+  lastSeqAck = cmd.seq;
+}
+
 void loop() {
   encoder.update();
+
+  // Drain any commands the CommandPoller task has queued. Bounded by
+  // the queue depth (4); typically 0 or 1 per iteration.
+  RemoteCommand cmd;
+  while (xQueueReceive(commandPoller.queue(), &cmd, 0) == pdTRUE) {
+    dispatchRemoteCommand(cmd);
+  }
 
   switch (mode) {
     case Mode::Menu:             handleMenu();      break;

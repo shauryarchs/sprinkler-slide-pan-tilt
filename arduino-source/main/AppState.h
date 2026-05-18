@@ -23,6 +23,15 @@ extern Mode mode;
 extern int menuIndex;
 extern bool sliderHomed;
 
+// Sequence number of the last /api/motor/command the device executed.
+// CommandPoller passes this as ?since=<lastSeqAck> when polling so the
+// worker only returns newer commands. StatePusher echoes it in its
+// push JSON so the website can show "Done" feedback once a command
+// has been picked up. Read on core 0 (network task) and written by
+// the main loop on core 1; volatile + single-word atomic loads
+// suffice.
+extern volatile unsigned long lastSeqAck;
+
 // Stable lowercase machine-readable names the website's control page
 // keys off (see docs/control.html → MODE_LABELS).
 inline const char* modeName(Mode m) {
