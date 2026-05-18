@@ -34,7 +34,7 @@ enum class RemoteCmdKind : uint8_t {
 struct RemoteCommand {
   RemoteCmdKind kind;
   Mode targetMode;   // for EnterMode
-  int speed;         // for SetSliderSpeed (clamped 0..Encoder::kRange)
+  int speed;         // for SetSliderSpeed (clamped ±Encoder::kRange)
   unsigned long seq; // from worker — bumped into lastSeqAck after dispatch
 };
 

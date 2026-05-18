@@ -372,11 +372,15 @@ void dispatchRemoteCommand(const RemoteCommand& cmd) {
       tiltMotor3.zeroPosition();
       break;
     case RemoteCmdKind::SetSliderSpeed:
-      // Only meaningful in All Motors mode where |dial| drives slider
-      // speed. In other modes the encoder has different semantics
-      // (menu navigation, per-motor speed setpoint) and re-anchoring
-      // it would just surprise the user.
-      if (mode == Mode::AllMotorsControl) {
+      // The encoder dial is the speed setpoint in every motor mode:
+      // signed (sign = direction) for Motor 1/2/3, magnitude for
+      // All Motors (direction is the bounce). Re-anchor in all four
+      // so the website's signed speed slider works across them.
+      // Menu / PanSetup / TiltSetup use the encoder as a navigation
+      // delta or a setup nudge, so re-anchoring there would just
+      // surprise the user.
+      if (mode == Mode::Motor1Control || mode == Mode::Motor2Control ||
+          mode == Mode::Motor3Control || mode == Mode::AllMotorsControl) {
         encoder.set(cmd.speed);
       }
       break;
