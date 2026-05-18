@@ -29,12 +29,15 @@ enum class RemoteCmdKind : uint8_t {
   ZeroPan,
   ZeroTilt,
   SetSliderSpeed,
+  NudgePan,
+  NudgeTilt,
 };
 
 struct RemoteCommand {
   RemoteCmdKind kind;
   Mode targetMode;   // for EnterMode
   int speed;         // for SetSliderSpeed (clamped ±Encoder::kRange)
+  int deltaDeg;      // for NudgePan / NudgeTilt (signed degrees, ±360)
   unsigned long seq; // from worker — bumped into lastSeqAck after dispatch
 };
 

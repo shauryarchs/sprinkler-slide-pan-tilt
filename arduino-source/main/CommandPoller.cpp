@@ -143,5 +143,14 @@ bool CommandPoller::parseCommandJson(const char* json, RemoteCommand* out) {
     out->speed = static_cast<int>(speed);
     return true;
   }
+  if (strcmp(kindStr, "nudgePan") == 0 || strcmp(kindStr, "nudgeTilt") == 0) {
+    out->kind = (strcmp(kindStr, "nudgePan") == 0)
+                    ? RemoteCmdKind::NudgePan
+                    : RemoteCmdKind::NudgeTilt;
+    long deltaDeg = 0;
+    if (!extractLongField(json, "deltaDeg", &deltaDeg)) return false;
+    out->deltaDeg = static_cast<int>(deltaDeg);
+    return true;
+  }
   return false;
 }
