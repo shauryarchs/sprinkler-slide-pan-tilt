@@ -371,6 +371,21 @@ void dispatchRemoteCommand(const RemoteCommand& cmd) {
     case RemoteCmdKind::ZeroTilt:
       tiltMotor3.zeroPosition();
       break;
+    case RemoteCmdKind::NudgePan: {
+      // Convert signed degrees → microsteps; same math as
+      // kSetupMicroStepsPerClick uses. stepBy() bypasses soft bounds
+      // — intentional, this mirrors PanSetup mode behavior.
+      const long steps =
+          (static_cast<long>(cmd.deltaDeg) * PanMotor2::kStepsPerRev) / 360;
+      panMotor2.stepBy(static_cast<int>(steps));
+      break;
+    }
+    case RemoteCmdKind::NudgeTilt: {
+      const long steps =
+          (static_cast<long>(cmd.deltaDeg) * TiltMotor3::kStepsPerRev) / 360;
+      tiltMotor3.stepBy(static_cast<int>(steps));
+      break;
+    }
     case RemoteCmdKind::SetSliderSpeed:
       // The encoder dial is the speed setpoint in every motor mode:
       // signed (sign = direction) for Motor 1/2/3, magnitude for
