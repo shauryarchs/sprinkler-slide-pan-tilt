@@ -67,10 +67,14 @@ const int kMenuItemCount = 4;
 // by the calibration nudgeTilt / zeroTilt commands. The slider's
 // speed is driven by the encoder dial — magnitude only, so spinning
 // either way speeds it up and dial=0 parks it. Pan has its own
-// per-motor magnitude that defaults to 12 and can be retuned at
+// per-motor magnitude that defaults to 6 and can be retuned at
 // runtime by the website via setAllMotorsPanSpeed. Speeds are on
 // the dial's [0, kEncoderRange] scale.
-int allMotorsPanSpeed = 12;
+int allMotorsPanSpeed = 6;
+// Slider speed setpoint applied to the encoder dial on Petrol entry,
+// so the carriage starts moving as soon as the user selects the mode
+// instead of sitting at zero until they spin the dial.
+constexpr int kPetrolInitialSliderSpeed = 18;
 // Bounce state per motor in Petrol mode. +1 = heading toward the
 // soft ceiling, -1 = heading toward the soft floor.
 int allMotorsSliderDir = 1;
@@ -116,6 +120,12 @@ void enterMotor3() {
 
 void enterAllMotors() {
   encoder.reset();
+  // Seed the dial so the slider starts moving immediately. The Petrol
+  // handler reads encoder.position() as the slider speed magnitude, so
+  // setting it post-reset gives a non-zero starting speed. The user
+  // can spin the dial — or the website slider — to override at any
+  // time.
+  encoder.set(kPetrolInitialSliderSpeed);
   encoder.syncSwState();
   // Pick a starting direction for each bouncing motor that doesn't
   // stall against the ceiling on entry — if already at the ceiling,
