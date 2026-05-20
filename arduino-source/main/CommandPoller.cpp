@@ -136,8 +136,15 @@ bool CommandPoller::parseCommandJson(const char* json, RemoteCommand* out) {
   if (strcmp(kindStr, "rehome") == 0)         { out->kind = RemoteCmdKind::Rehome;         return true; }
   if (strcmp(kindStr, "zeroPan") == 0)        { out->kind = RemoteCmdKind::ZeroPan;        return true; }
   if (strcmp(kindStr, "zeroTilt") == 0)       { out->kind = RemoteCmdKind::ZeroTilt;       return true; }
-  if (strcmp(kindStr, "setSliderSpeed") == 0) {
-    out->kind = RemoteCmdKind::SetSliderSpeed;
+  if (strcmp(kindStr, "setSliderSpeed") == 0 ||
+      strcmp(kindStr, "setAllMotorsPanSpeed") == 0 ||
+      strcmp(kindStr, "setAllMotorsTiltSpeed") == 0) {
+    if (strcmp(kindStr, "setSliderSpeed") == 0)
+      out->kind = RemoteCmdKind::SetSliderSpeed;
+    else if (strcmp(kindStr, "setAllMotorsPanSpeed") == 0)
+      out->kind = RemoteCmdKind::SetAllMotorsPanSpeed;
+    else
+      out->kind = RemoteCmdKind::SetAllMotorsTiltSpeed;
     long speed = 0;
     if (!extractLongField(json, "speed", &speed)) return false;
     out->speed = static_cast<int>(speed);

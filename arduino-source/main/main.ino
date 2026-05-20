@@ -63,12 +63,14 @@ volatile unsigned long lastSeqAck = 0;
 const int kMenuItemCount = 4;
 
 // "All motors" demo mode. All three motors bounce between their soft
-// floor and ceiling. Pan and Tilt run at fixed speeds; the slider's
-// speed is driven by the encoder dial — magnitude only, so spinning
-// either way speeds it up and dial=0 parks it. Speeds are on the dial's
-// signed [-kEncoderRange, +kEncoderRange] scale.
-const int kAllMotorsPanSpeed = 12;
-const int kAllMotorsTiltSpeed = 12;
+// floor and ceiling. The slider's speed is driven by the encoder dial
+// — magnitude only, so spinning either way speeds it up and dial=0
+// parks it. Pan and Tilt have their own per-motor magnitudes that
+// default to 12 and can be retuned at runtime by the website via
+// setAllMotorsPanSpeed / setAllMotorsTiltSpeed. All speeds are on the
+// dial's [0, kEncoderRange] scale.
+int allMotorsPanSpeed = 12;
+int allMotorsTiltSpeed = 12;
 // Bounce state for each motor in all-motors mode. +1 = heading toward
 // the soft ceiling, -1 = heading toward the soft floor.
 int allMotorsSliderDir = 1;
@@ -291,7 +293,7 @@ void handleAllMotors() {
   } else if (allMotorsPanDir < 0 && panPos <= PanMotor2::kMinPositionSteps) {
     allMotorsPanDir = 1;
   }
-  panMotor2.update(allMotorsPanDir * kAllMotorsPanSpeed);
+  panMotor2.update(allMotorsPanDir * allMotorsPanSpeed);
 
   // Tilt: same bounce, same range.
   long tiltPos = tiltMotor3.positionSteps();
@@ -300,7 +302,7 @@ void handleAllMotors() {
   } else if (allMotorsTiltDir < 0 && tiltPos <= TiltMotor3::kMinPositionSteps) {
     allMotorsTiltDir = 1;
   }
-  tiltMotor3.update(allMotorsTiltDir * kAllMotorsTiltSpeed);
+  tiltMotor3.update(allMotorsTiltDir * allMotorsTiltSpeed);
 }
 
 void handlePanSetup() {
@@ -398,6 +400,15 @@ void dispatchRemoteCommand(const RemoteCommand& cmd) {
           mode == Mode::Motor3Control || mode == Mode::AllMotorsControl) {
         encoder.set(cmd.speed);
       }
+      break;
+    case RemoteCmdKind::SetAllMotorsPanSpeed:
+      // Magnitude only — direction is set by the bounce logic in
+      // handleAllMotors(). Clamp to the encoder's positive range so a
+      // bad payload can't push the motor past its max step rate.
+      allMotorsPanSpeed = constrain(cmd.speed, 0, Encoder::kRange);
+      break;
+    case RemoteCmdKind::SetAllMotorsTiltSpeed:
+      allMotorsTiltSpeed = constrain(cmd.speed, 0, Encoder::kRange);
       break;
     default:
       break;
