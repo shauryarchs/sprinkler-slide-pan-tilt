@@ -32,7 +32,6 @@ enum class RemoteCmdKind : uint8_t {
   NudgePan,
   NudgeTilt,
   SetAllMotorsPanSpeed,
-  SetAllMotorsTiltSpeed,
 };
 
 struct RemoteCommand {

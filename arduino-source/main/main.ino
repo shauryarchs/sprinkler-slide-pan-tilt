@@ -62,20 +62,19 @@ bool sliderHomed = false;
 volatile unsigned long lastSeqAck = 0;
 const int kMenuItemCount = 4;
 
-// "All motors" demo mode. All three motors bounce between their soft
-// floor and ceiling. The slider's speed is driven by the encoder dial
-// — magnitude only, so spinning either way speeds it up and dial=0
-// parks it. Pan and Tilt have their own per-motor magnitudes that
-// default to 12 and can be retuned at runtime by the website via
-// setAllMotorsPanSpeed / setAllMotorsTiltSpeed. All speeds are on the
-// dial's [0, kEncoderRange] scale.
+// "Petrol" demo mode. The slider and pan motors bounce between their
+// soft floor and ceiling; the tilt motor stays put and is only moved
+// by the calibration nudgeTilt / zeroTilt commands. The slider's
+// speed is driven by the encoder dial — magnitude only, so spinning
+// either way speeds it up and dial=0 parks it. Pan has its own
+// per-motor magnitude that defaults to 12 and can be retuned at
+// runtime by the website via setAllMotorsPanSpeed. Speeds are on
+// the dial's [0, kEncoderRange] scale.
 int allMotorsPanSpeed = 12;
-int allMotorsTiltSpeed = 12;
-// Bounce state for each motor in all-motors mode. +1 = heading toward
-// the soft ceiling, -1 = heading toward the soft floor.
+// Bounce state per motor in Petrol mode. +1 = heading toward the
+// soft ceiling, -1 = heading toward the soft floor.
 int allMotorsSliderDir = 1;
 int allMotorsPanDir = 1;
-int allMotorsTiltDir = 1;
 
 // Microsteps applied per encoder click during PanSetup/TiltSetup. The
 // motors run at 6400 microsteps/rev = 17.78 microsteps/° with a 1:1
@@ -118,14 +117,14 @@ void enterMotor3() {
 void enterAllMotors() {
   encoder.reset();
   encoder.syncSwState();
-  // Pick a starting direction for each motor that doesn't stall against
-  // the ceiling on entry — if already at the ceiling, head back.
+  // Pick a starting direction for each bouncing motor that doesn't
+  // stall against the ceiling on entry — if already at the ceiling,
+  // head back. Tilt doesn't bounce in Petrol mode, so no direction
+  // for it.
   allMotorsSliderDir =
       (sliderMotor1.positionSteps() >= SliderMotor1::kMaxPositionSteps) ? -1 : 1;
   allMotorsPanDir =
       (panMotor2.positionSteps() >= PanMotor2::kMaxPositionSteps) ? -1 : 1;
-  allMotorsTiltDir =
-      (tiltMotor3.positionSteps() >= TiltMotor3::kMaxPositionSteps) ? -1 : 1;
   mode = Mode::AllMotorsControl;
   lastDisplayUpdateMs = 0;
 }
@@ -295,14 +294,8 @@ void handleAllMotors() {
   }
   panMotor2.update(allMotorsPanDir * allMotorsPanSpeed);
 
-  // Tilt: same bounce, same range.
-  long tiltPos = tiltMotor3.positionSteps();
-  if (allMotorsTiltDir > 0 && tiltPos >= TiltMotor3::kMaxPositionSteps) {
-    allMotorsTiltDir = -1;
-  } else if (allMotorsTiltDir < 0 && tiltPos <= TiltMotor3::kMinPositionSteps) {
-    allMotorsTiltDir = 1;
-  }
-  tiltMotor3.update(allMotorsTiltDir * allMotorsTiltSpeed);
+  // Tilt is intentionally not driven in Petrol mode — it stays put,
+  // and is moved only by the calibration nudgeTilt / zeroTilt commands.
 }
 
 void handlePanSetup() {
@@ -347,7 +340,7 @@ void handleTiltSetup() {
 // Conflict policy is last-write-wins: a remote `enterMode` takes effect
 // immediately even if the user is mid-spin; the next encoder click
 // would just transition again. setSliderSpeed re-anchors the encoder
-// dial, which the All Motors handler reads on each iteration. We
+// dial, which the Petrol handler reads on each iteration. We
 // intentionally ignore PanSetup / TiltSetup target modes — that flow
 // is one-shot at boot and not exposed to the remote.
 void dispatchRemoteCommand(const RemoteCommand& cmd) {
@@ -391,7 +384,7 @@ void dispatchRemoteCommand(const RemoteCommand& cmd) {
     case RemoteCmdKind::SetSliderSpeed:
       // The encoder dial is the speed setpoint in every motor mode:
       // signed (sign = direction) for Motor 1/2/3, magnitude for
-      // All Motors (direction is the bounce). Re-anchor in all four
+      // Petrol (direction is the bounce). Re-anchor in all four
       // so the website's signed speed slider works across them.
       // Menu / PanSetup / TiltSetup use the encoder as a navigation
       // delta or a setup nudge, so re-anchoring there would just
@@ -406,9 +399,6 @@ void dispatchRemoteCommand(const RemoteCommand& cmd) {
       // handleAllMotors(). Clamp to the encoder's positive range so a
       // bad payload can't push the motor past its max step rate.
       allMotorsPanSpeed = constrain(cmd.speed, 0, Encoder::kRange);
-      break;
-    case RemoteCmdKind::SetAllMotorsTiltSpeed:
-      allMotorsTiltSpeed = constrain(cmd.speed, 0, Encoder::kRange);
       break;
     default:
       break;
