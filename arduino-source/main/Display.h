@@ -18,15 +18,15 @@ class Display {
   void showHomingMessage();
   // Motor-selection screen shown while no motor is active. selection
   // indexes the menu items (0 = Motor 1, 1 = Motor 2, 2 = Motor 3,
-  // 3 = Petrol).
+  // 3 = Patrol).
   void showMenu(int selection);
   // Status screens for each motor while it's being controlled.
   void showMotor1Status(int dial, long posMm, bool limitEngaged);
   void showMotor2Status(int dial, long posDeg);
   void showMotor3Status(int dial, long posDeg);
-  // Status screen for the Petrol demo mode. sliderSpeed is the
+  // Status screen for the Patrol demo mode. sliderSpeed is the
   // current dial-driven speed magnitude (0..Encoder::kRange). Tilt
-  // doesn't bounce in Petrol but its current angle is still shown for
+  // doesn't bounce in Patrol but its current angle is still shown for
   // the operator's reference.
   void showAllMotorsStatus(int sliderSpeed, long sliderMm, long panDeg,
                            long tiltDeg, bool limitEngaged);

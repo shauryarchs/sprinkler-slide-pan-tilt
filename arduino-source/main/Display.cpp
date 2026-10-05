@@ -55,7 +55,7 @@ void Display::showMenu(int selection) {
   display_.setCursor(0, 38);
   display_.print(selection == 2 ? F("> Tilt-Motor3") : F("  Tilt-Motor3"));
   display_.setCursor(0, 50);
-  display_.print(selection == 3 ? F("> Petrol") : F("  Petrol"));
+  display_.print(selection == 3 ? F("> Patrol") : F("  Patrol"));
 
   display_.display();
 }
@@ -213,7 +213,7 @@ void Display::showAllMotorsStatus(int sliderSpeed, long sliderMm, long panDeg,
   display_.setTextSize(1);
 
   display_.setCursor(0, 0);
-  display_.println(F("Petrol"));
+  display_.println(F("Patrol"));
 
   display_.setCursor(0, 12);
   display_.print(F("Slider: "));

@@ -25,7 +25,7 @@ class Encoder {
 
   // Set the dial to an arbitrary value (clamped to ±kRange). Used by
   // the remote setSliderSpeed command in any motor mode (Motor 1/2/3
-  // or Petrol) so a website slider can re-anchor the encoder-driven
+  // or Patrol) so a website slider can re-anchor the encoder-driven
   // speed setpoint. The next ISR tick will adjust from this new
   // baseline, giving last-write-wins semantics between the physical
   // dial and the remote.
