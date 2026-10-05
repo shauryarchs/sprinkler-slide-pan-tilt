@@ -176,7 +176,9 @@ A `hotspot=yes` line is also printed immediately when heat appears or clears.
 | 8 | Turn the motor power back on. Run the slider, pan, tilt, and Patrol mode from the encoder and the website while the camera runs. | Motors move as smoothly as before; THERMAL lines keep printing. |
 | 9 | Unplug the camera's SDA wire for ~5 s, then plug it back in. | `THERMAL camera=lost ...`, motors unaffected; within ~10 s of reconnecting, `THERMAL camera=ok` again. |
 
-**If step 5 is reversed** (e.g. right shows negative), set `kFlipX = true` (or `kFlipY = true` for up/down) in `ThermalCamera.h` and re-upload.
+**If step 5 is reversed** (e.g. right shows negative), toggle `kFlipX` (or `kFlipY` for up/down) in `ThermalCamera.h` and re-upload. The default `kFlipX = true` already corrects the module's mirrored raw image.
+
+**Tip:** do the direction check from **behind** the camera. Facing the camera reverses left and right from your point of view.
 
 ### Tuning (`arduino-source/main/ThermalCamera.h`)
 
@@ -186,7 +188,7 @@ A `hotspot=yes` line is also printed immediately when heat appears or clears.
 | `kMinRiseC` | 15 | Raise if sun-warmed surfaces trigger detection |
 | `kFramesToDetect` / `kFramesToClear` | 3 / 8 | Faster or slower on/off response |
 | `kSmoothing` | 0.4 | Lower = steadier but slower to follow; higher = faster but jumpier |
-| `kFlipX` / `kFlipY` | false | Direction check (step 5) is reversed |
+| `kFlipX` / `kFlipY` | **true** / false | Direction check (step 5) is reversed. `kFlipX` is `true` because the module's raw image is mirrored left-right (confirmed on hardware); change only if you mount the camera differently |
 | `kCameraHeightM`, `kTiltLevelDeg`, `kTiltUpIsPositive` | 0, 0, true | Enables the experimental flat-ground distance estimate: camera height above ground, the tilt reading when the camera points level, and whether positive tilt points up |
 
 ### What was validated where (Phase 2)

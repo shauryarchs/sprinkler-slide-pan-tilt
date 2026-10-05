@@ -54,7 +54,10 @@ class ThermalCamera {
   // --- Orientation -------------------------------------------------------
   // Flip if a heat source to the camera's right reports dx < 0, or a
   // source above center reports dy < 0, for how the module is mounted.
-  static constexpr bool kFlipX = false;
+  // kFlipX = true: hardware test (2026-10-05) showed the raw image is
+  // mirrored left-right — a source on the camera's right read dx < 0.
+  // Up/down was already correct.
+  static constexpr bool kFlipX = true;
   static constexpr bool kFlipY = false;
 
   // --- Distance estimate (experimental, off by default) ------------------
