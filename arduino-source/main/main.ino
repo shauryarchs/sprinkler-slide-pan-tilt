@@ -62,7 +62,7 @@ bool sliderHomed = false;
 volatile unsigned long lastSeqAck = 0;
 const int kMenuItemCount = 4;
 
-// "Petrol" demo mode. The slider and pan motors bounce between their
+// "Patrol" demo mode. The slider and pan motors bounce between their
 // soft floor and ceiling; the tilt motor stays put and is only moved
 // by the calibration nudgeTilt / zeroTilt commands. The slider's
 // speed is driven by the encoder dial — magnitude only, so spinning
@@ -71,11 +71,11 @@ const int kMenuItemCount = 4;
 // runtime by the website via setAllMotorsPanSpeed. Speeds are on
 // the dial's [0, kEncoderRange] scale.
 int allMotorsPanSpeed = 6;
-// Slider speed setpoint applied to the encoder dial on Petrol entry,
+// Slider speed setpoint applied to the encoder dial on Patrol entry,
 // so the carriage starts moving as soon as the user selects the mode
 // instead of sitting at zero until they spin the dial.
-constexpr int kPetrolInitialSliderSpeed = 18;
-// Bounce state per motor in Petrol mode. +1 = heading toward the
+constexpr int kPatrolInitialSliderSpeed = 18;
+// Bounce state per motor in Patrol mode. +1 = heading toward the
 // soft ceiling, -1 = heading toward the soft floor.
 int allMotorsSliderDir = 1;
 int allMotorsPanDir = 1;
@@ -120,16 +120,16 @@ void enterMotor3() {
 
 void enterAllMotors() {
   encoder.reset();
-  // Seed the dial so the slider starts moving immediately. The Petrol
+  // Seed the dial so the slider starts moving immediately. The Patrol
   // handler reads encoder.position() as the slider speed magnitude, so
   // setting it post-reset gives a non-zero starting speed. The user
   // can spin the dial — or the website slider — to override at any
   // time.
-  encoder.set(kPetrolInitialSliderSpeed);
+  encoder.set(kPatrolInitialSliderSpeed);
   encoder.syncSwState();
   // Pick a starting direction for each bouncing motor that doesn't
   // stall against the ceiling on entry — if already at the ceiling,
-  // head back. Tilt doesn't bounce in Petrol mode, so no direction
+  // head back. Tilt doesn't bounce in Patrol mode, so no direction
   // for it.
   allMotorsSliderDir =
       (sliderMotor1.positionSteps() >= SliderMotor1::kMaxPositionSteps) ? -1 : 1;
@@ -304,7 +304,7 @@ void handleAllMotors() {
   }
   panMotor2.update(allMotorsPanDir * allMotorsPanSpeed);
 
-  // Tilt is intentionally not driven in Petrol mode — it stays put,
+  // Tilt is intentionally not driven in Patrol mode — it stays put,
   // and is moved only by the calibration nudgeTilt / zeroTilt commands.
 }
 
@@ -350,7 +350,7 @@ void handleTiltSetup() {
 // Conflict policy is last-write-wins: a remote `enterMode` takes effect
 // immediately even if the user is mid-spin; the next encoder click
 // would just transition again. setSliderSpeed re-anchors the encoder
-// dial, which the Petrol handler reads on each iteration. We
+// dial, which the Patrol handler reads on each iteration. We
 // intentionally ignore PanSetup / TiltSetup target modes — that flow
 // is one-shot at boot and not exposed to the remote.
 void dispatchRemoteCommand(const RemoteCommand& cmd) {
@@ -394,7 +394,7 @@ void dispatchRemoteCommand(const RemoteCommand& cmd) {
     case RemoteCmdKind::SetSliderSpeed:
       // The encoder dial is the speed setpoint in every motor mode:
       // signed (sign = direction) for Motor 1/2/3, magnitude for
-      // Petrol (direction is the bounce). Re-anchor in all four
+      // Patrol (direction is the bounce). Re-anchor in all four
       // so the website's signed speed slider works across them.
       // Menu / PanSetup / TiltSetup use the encoder as a navigation
       // delta or a setup nudge, so re-anchoring there would just
