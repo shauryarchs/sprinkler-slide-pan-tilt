@@ -9,6 +9,7 @@
 #include "PanMotor2.h"
 #include "SliderMotor1.h"
 #include "StatePusher.h"
+#include "ThermalCamera.h"
 #include "TiltMotor3.h"
 #include "secrets.h"
 
@@ -41,6 +42,9 @@ TiltMotor3 tiltMotor3(pins::kMotor3Dir, pins::kMotor3Step);
 Display oled;
 StatePusher statePusher(sliderMotor1, panMotor2, tiltMotor3, encoder, limitSwitch);
 CommandPoller commandPoller;
+// Thermal camera on Wire1 (A0/A1). Reports hotspots to the Serial
+// Monitor only — it never moves a motor.
+ThermalCamera thermalCamera(tiltMotor3);
 
 // UI state machine: the menu is the resting screen; selecting an item
 // hands the encoder over to that motor's control logic. Short-press
@@ -153,6 +157,10 @@ void rehome() {
 }
 
 void setup() {
+  // USB serial for the thermal camera's "THERMAL ..." status lines.
+  // Printing happens on the core-0 thermal task, never the motor loop.
+  Serial.begin(115200);
+
   limitSwitch.begin();
   sliderMotor1.begin();
   panMotor2.begin();
@@ -180,6 +188,7 @@ void setup() {
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   statePusher.begin(EMBER_API_HOST);
   commandPoller.begin(EMBER_API_HOST);
+  thermalCamera.begin();
 
   // After boot homing, prompt the user to set the Pan and Tilt initial
   // positions before handing control over to the main menu. This runs
