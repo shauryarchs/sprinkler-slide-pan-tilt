@@ -1,8 +1,13 @@
-# Thermal camera setup (MLX90640-D110), Phase 1: USB view
+# Thermal camera setup (MLX90640-D110)
 
-This guide connects a **Waveshare MLX90640-D110** thermal camera to the **Arduino Nano ESP32** and shows the live raw thermal image on a computer over USB. Nothing is sent to the EmberSensor Worker, website, or iOS app, and the motor firmware is not changed.
+This guide connects a **Waveshare MLX90640-D110** thermal camera to the **Arduino Nano ESP32**.
 
-Tracking issue: shauryarchs/embersensor-site#46
+- **Phase 1, USB view (sections 1–8):** a standalone test sketch streams the live raw thermal image to a Chrome viewer. Use it to check wiring and see the full image.
+- **Phase 2, main firmware (section 9):** the camera runs inside the motor firmware and reports hotspots (direction, temperature) to the Serial Monitor while the motors work.
+
+Nothing is sent to the EmberSensor Worker, website, or iOS app in either phase, and the camera never moves a motor or switches water.
+
+Tracking issues: shauryarchs/embersensor-site#46 (Phase 1), shauryarchs/embersensor-site#49 (Phase 2)
 
 | Item | Value |
 |---|---|
@@ -14,6 +19,7 @@ Tracking issue: shauryarchs/embersensor-site#46
 | Board | Arduino Nano ESP32 (ESP32-S3) |
 | Test sketch | `arduino-source/thermal-usb-test/thermal-usb-test.ino` |
 | Viewer | `tools/thermal-viewer/thermal-serial.html` (Chrome or Edge) |
+| Main firmware | `arduino-source/main/` (`ThermalCamera.h/.cpp`) |
 
 ## 1. Wiring
 
@@ -44,9 +50,11 @@ Pins already used by the motor firmware, for reference: D3–D5 encoder, D6–D1
 - Keep the lens clear. **Glass and most clear plastics block thermal infrared**, so the camera cannot see through a window or a clear case.
 - Don't point it at the sun.
 
-**Notes for the later mounting phase** (on or near the sprinkler slider and pan/tilt arm):
+**For Phase 2 — mounting on the arm:**
 
-- **On the tilt arm next to the nozzle, aligned with it:** the image then shows where the sprinkler is aimed. Readings can be tagged with slider, pan, and tilt position.
+- **Where:** on the tilt head, right next to the nozzle, with the camera's lens pointing the **same direction as the nozzle**. When a hotspot is at the image centre (`dx` ≈ 0, `dy` ≈ 0), the nozzle points at it. A few centimetres of offset between lens and nozzle doesn't matter at fire distances.
+- **Upright:** mount the module the same way up as during the Phase 1 test (the image looked correct with no Flip/Rotate). If you mount it rotated or upside down, set `kFlipX` / `kFlipY` in `ThermalCamera.h` (see section 9).
+- **Secure it:** screws, standoffs, or a bracket — not tape. Vibration from the steppers can loosen it and shift the aim.
 - **Cable movement:** tilt can rotate ±360°, which will wind up a cable. Use a slack loop with strain relief, or limit tilt travel while the camera is mounted.
 - **Water:** the module is not waterproof. It needs an enclosure with an **IR-transparent window** (germanium, zinc selenide, or thin HDPE film), not glass or acrylic.
 - **Heat sources:** keep the camera's view and its body away from the stepper drivers and motors. They get warm and will show up as hot spots.
@@ -117,8 +125,83 @@ No `secrets.h` or Wi-Fi setup is needed. The test sketch does not use the networ
 
 ## 8. Assumptions and limitations
 
-- **Pull-ups:** I assume the module has onboard I2C pull-ups. Waveshare's wiring uses none, but this is not confirmed from the schematic.
+- **Pull-ups:** the module is assumed to have onboard I2C pull-ups. Waveshare's wiring uses none, but this is not confirmed from the schematic.
 - **Orientation:** which way is "up" depends on how the module is held. Use the viewer's Flip/Rotate controls.
 - **Resolution:** 32 × 24 pixels shows heat shapes, not detail. Small or distant hot spots blend into neighbouring pixels.
 - **Display only:** thermal data is not connected to fire risk, the FireGuard sprinkler trigger, or motor movement. Any automatic action stays disabled until thermal detection has been reviewed and validated.
-- **Later phases:** adding the camera to the main firmware, a Wi-Fi viewer, and website/iOS upload are tracked in shauryarchs/embersensor-site#46 but not part of this phase.
+- **Later phases:** automatic aiming (shauryarchs/embersensor-site#52), the water pump and nozzle (#53), and the overview camera (#50) are separate issues.
+
+## 9. Phase 2: camera in the main firmware
+
+With Phase 2, `arduino-source/main` reads the camera in the background while the motors run, finds the hot blob, and prints its status to the **Serial Monitor**. It does **not** move any motor or switch any water; the motors behave exactly as before.
+
+### What it does
+- Reads frames at ~4 fps on core 0 (next to the Wi-Fi tasks), so motor stepping, the encoder, and the OLED are unaffected.
+- **Hotspot rule:** hottest pixel ≥ **50 °C** *and* ≥ **15 °C** above the scene's median. People (skin ~33–36 °C) never count as fire.
+- Takes the temperature-weighted **centre of the hot blob** (not the single hottest pixel), then **smooths** it over ~1 s and **debounces** detection (on after 3 frames, off after ~2 s), so flame flicker doesn't make the output jump.
+- Converts the blob centre to **degrees from the image centre**.
+- If the camera is missing or unplugged, it prints one message and keeps retrying every 10 s. Everything else works normally.
+
+### Serial Monitor output (115200 baud, about once per second)
+
+```
+THERMAL camera=ok serial=XXXXXXXXXXXX rate=8Hz (~4 fps) threshold=50C rise=15C
+THERMAL hotspot=no max=24.1C bg=22.0C
+THERMAL hotspot=yes dx=+12.3deg dy=-5.1deg max=180.2C bg=22.4C blob=6px dist=n/a
+```
+
+| Field | Meaning |
+|---|---|
+| `hotspot` | `yes` once heat is confirmed (debounced) |
+| `dx` | Degrees **right** (+) or **left** (−) of the image centre, from the camera's point of view |
+| `dy` | Degrees **above** (+) or **below** (−) the image centre |
+| `max` | Smoothed hottest-pixel temperature |
+| `bg` | Scene median ("room") temperature |
+| `blob` | Size of the hot area in pixels |
+| `dist` | Flat-ground distance estimate; `n/a` until configured (see tuning) |
+
+A `hotspot=yes` line is also printed immediately when heat appears or clears.
+
+### Step-by-step test
+
+| Step | Action | Expected result |
+|---|---|---|
+| 1 | Wire the camera as in section 1. Turn the **motor power supply off** for the first run. | — |
+| 2 | Upload `arduino-source/main/main.ino` (needs your `secrets.h`). Open the Serial Monitor at **115200**. | Slider homing runs as usual. `THERMAL camera=ok ...` appears, then `THERMAL hotspot=no max=... bg=...` once per second with room temperatures. |
+| 3 | Hold your hand in front of the camera. | Still `hotspot=no` (a hand is below 50 °C), but `max` rises to ~33–36 °C. |
+| 4 | Hold something **hot** in view: a mug of just-boiled water, a lit candle, or a lighter flame (carefully, ~0.5–1 m away). | Within ~1 s: `hotspot=yes` with `max` well above 50 °C. |
+| 5 | **Direction check.** Stand behind the camera, looking the way it looks. Move the hot object to **your right**, then **your left**, then **up**, then **down**. | Right → `dx` positive; left → `dx` negative; up → `dy` positive; down → `dy` negative. Centred → both near 0. |
+| 6 | **Flicker check.** Hold a candle or lighter still in view for ~10 s. | `hotspot` stays `yes` the whole time; `dx`/`dy` change by only a degree or two per line. |
+| 7 | Remove the hot object. | `hotspot=no` after ~2 s. |
+| 8 | Turn the motor power back on. Run the slider, pan, tilt, and Petrol mode from the encoder and the website while the camera runs. | Motors move as smoothly as before; THERMAL lines keep printing. |
+| 9 | Unplug the camera's SDA wire for ~5 s, then plug it back in. | `THERMAL camera=lost ...`, motors unaffected; within ~10 s of reconnecting, `THERMAL camera=ok` again. |
+
+**If step 5 is reversed** (e.g. right shows negative), set `kFlipX = true` (or `kFlipY = true` for up/down) in `ThermalCamera.h` and re-upload.
+
+### Tuning (`arduino-source/main/ThermalCamera.h`)
+
+| Constant | Default | When to change |
+|---|---|---|
+| `kHotspotMinC` | 50 | Lower **temporarily** (e.g. 30) to test detection with a hand; never leave it below skin temperature for real use |
+| `kMinRiseC` | 15 | Raise if sun-warmed surfaces trigger detection |
+| `kFramesToDetect` / `kFramesToClear` | 3 / 8 | Faster or slower on/off response |
+| `kSmoothing` | 0.4 | Lower = steadier but slower to follow; higher = faster but jumpier |
+| `kFlipX` / `kFlipY` | false | Direction check (step 5) is reversed |
+| `kCameraHeightM`, `kTiltLevelDeg`, `kTiltUpIsPositive` | 0, 0, true | Enables the experimental flat-ground distance estimate: camera height above ground, the tilt reading when the camera points level, and whether positive tilt points up |
+
+### What was validated where (Phase 2)
+
+| Check | Done in software | Needs your hardware |
+|---|---|---|
+| Main firmware compiles for Arduino Nano ESP32 with the camera code; no warnings from project code; 29% flash, 22% RAM | ✅ | |
+| Detection logic on synthetic frames (host test): empty room and a 34 °C person not detected; 3-frame detect / 8-frame clear; right/up give +dx/+dy; centred blob ≈ 0°; NaN pixels tolerated | ✅ | |
+| Flicker: flame jittering ±5° per frame → smoothed output moves < 1 pixel per frame, detection never drops | ✅ | |
+| Camera detected inside the main firmware; THERMAL lines print | | ✅ step 2 |
+| Real hot object detected; direction signs match the mounting | | ✅ steps 4–5 |
+| Real flame flicker stays stable | | ✅ step 6 |
+| Motors unaffected while the camera runs | | ✅ step 8 |
+| Camera unplug / replug recovery | | ✅ step 9 |
+
+### Notes
+- The Chrome viewer does **not** work with the main firmware (it only prints status lines, not full images). To see the full live image, upload the Phase 1 test sketch.
+- The distance estimate assumes flat ground and needs calibration; it stays `n/a` until configured. A more general estimate (triangulating from two slider positions) belongs with automatic aiming (#52).
