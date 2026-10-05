@@ -173,7 +173,7 @@ A `hotspot=yes` line is also printed immediately when heat appears or clears.
 | 5 | **Direction check.** Stand behind the camera, looking the way it looks. Move the hot object to **your right**, then **your left**, then **up**, then **down**. | Right → `dx` positive; left → `dx` negative; up → `dy` positive; down → `dy` negative. Centred → both near 0. |
 | 6 | **Flicker check.** Hold a candle or lighter still in view for ~10 s. | `hotspot` stays `yes` the whole time; `dx`/`dy` change by only a degree or two per line. |
 | 7 | Remove the hot object. | `hotspot=no` after ~2 s. |
-| 8 | Turn the motor power back on. Run the slider, pan, tilt, and Petrol mode from the encoder and the website while the camera runs. | Motors move as smoothly as before; THERMAL lines keep printing. |
+| 8 | Turn the motor power back on. Run the slider, pan, tilt, and Patrol mode from the encoder and the website while the camera runs. | Motors move as smoothly as before; THERMAL lines keep printing. |
 | 9 | Unplug the camera's SDA wire for ~5 s, then plug it back in. | `THERMAL camera=lost ...`, motors unaffected; within ~10 s of reconnecting, `THERMAL camera=ok` again. |
 
 **If step 5 is reversed** (e.g. right shows negative), set `kFlipX = true` (or `kFlipY = true` for up/down) in `ThermalCamera.h` and re-upload.
