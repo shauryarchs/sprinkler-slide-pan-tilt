@@ -216,7 +216,7 @@ Auto-aim moves the arm so a confirmed hotspot ends up in the **centre** of the t
 **Off at every boot.** It only runs after you type `aim on` in the Serial Monitor, so the laptop must be plugged in (someone is physically there). No water is switched; there is no pump yet (#53).
 
 ### How it aims
-1. **Left/right: slide first.** The carriage slides along the rail toward the hotspot. The first slide is a short probe (50 mm). How far the hotspot moved per mm tells the firmware how far to slide next, and gives a **distance estimate**. If a probe barely moves the view, the next one is bigger (100 mm, then up to 300 mm).
+1. **Left/right: slide first.** The carriage slides along the rail toward the hotspot, always in the fixed direction set by `kSlideSign` (it never reverses on its own). The first slide is a short probe (50 mm). How far the hotspot moved per mm tells the firmware how far to slide next, and gives a **distance estimate**. If a probe barely moves the view, the next one is bigger (100 mm, then up to 300 mm).
 2. **Pan only if needed:** when the carriage reaches the end of the rail (limit switch at the home end, 975 mm soft limit at the far end), or when even a long slide barely changes the view (a fire roughly 15 m+ away).
 3. **Up/down: tilt.**
 4. After every move it stops, waits for 3 fresh frames (~0.75 s), and looks again. Once the hotspot is within about one pixel of centre it holds still (`AIM on-target ...`).
@@ -224,7 +224,7 @@ Auto-aim moves the arm so a confirmed hotspot ends up in the **centre** of the t
 ### Safety
 - **Only at the menu.** Entering Motor 1/2/3 or Patrol mode, turning or pressing the encoder, or any command from the website stops auto-aim's motion immediately and pauses it for 5 s. Your controls always win.
 - **Limits:** every move goes through the motors' existing limits: slider limit switch and 5–975 mm, pan ±105°, **tilt never more than 360° either way from the boot zero** (cable protection).
-- **Wrong-way check:** if a pan or tilt move makes the error **bigger**, that axis is reversed once and the firmware prints which constant to change. A second wrong-way move turns auto-aim **off**. Slide direction is measured, so it corrects itself.
+- **Wrong-way check (pan / tilt only):** if a pan or tilt move makes the error **bigger**, that axis is reversed once and the firmware prints which constant to change. A second wrong-way move turns auto-aim **off**. Slide direction is fixed and never reversed.
 - Gives up after 25 steps, or when a limit stops it from centring, and pauses instead of hunting forever.
 
 ### Commands (Serial Monitor, 115200 baud)
@@ -277,7 +277,7 @@ AIM lost, back to waiting
 
 | Constant | Default | Meaning |
 |---|---|---|
-| `kSlideProbeSign` | **-1** | Direction of the first slide for a hotspot on the right. −1 confirmed on hardware; with +1 the first slide started the wrong way |
+| `kSlideSign` | **-1** | Fixed slide direction for a hotspot on the right; never reversed at runtime. −1 confirmed on hardware. Flip only if the camera is mounted facing the other way |
 | `kPanSign`, `kTiltSign` | 1 | Motor direction vs. image direction (see above) |
 | `aim::kDeadbandXDeg` / `kDeadbandYDeg` | 3.4 / 3.1 | "Close enough" (≈1 pixel) |
 | `aim::kGain` | 0.7 | Fraction of the error corrected per step |

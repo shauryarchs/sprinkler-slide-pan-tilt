@@ -45,25 +45,18 @@ AimPlan aim::planCorrection(const AimInputs& in) {
     //    rail and sliding still changes the view.
     bool sliding = false;
     if (std::fabs(in.panDeg) <= kSlideMaxPanDeg && !in.slideIneffective) {
-      float mm;
-      if (!std::isnan(in.dxPerMm) && in.dxPerMm != 0.0f) {
-        mm = -in.dxDeg / in.dxPerMm * kGain;  // measured: size the slide
+      // Direction is fixed (slideSign); only the distance is learned.
+      const int dir = signOf(in.dxDeg) * in.slideSign;
+      float mag;
+      if (!std::isnan(in.dxPerMm) && in.dxPerMm > 0.0f) {
+        mag = std::fabs(in.dxDeg) / in.dxPerMm * kGain;  // measured: size the slide
       } else {
-        mm = signOf(in.dxDeg) * in.slideProbeSign * in.slideProbeMm;  // probe
+        mag = in.slideProbeMm;  // first probe
       }
-      float room = mm > 0 ? in.slideRoomPlusMm : in.slideRoomMinusMm;
-      // Slide direction not measured yet and the guessed direction has no
-      // room (e.g. carriage parked at the home switch): probe the other
-      // way. The measurement then reveals the true direction.
-      const bool measured = !std::isnan(in.dxPerMm) && in.dxPerMm != 0.0f;
-      if (!measured && room < kSlideMinMm) {
-        mm = -mm;
-        room = mm > 0 ? in.slideRoomPlusMm : in.slideRoomMinusMm;
-      }
+      const float room = dir > 0 ? in.slideRoomPlusMm : in.slideRoomMinusMm;
       if (room >= kSlideMinMm) {
-        float mag = clampf(std::fabs(mm), kSlideMinMm, kSlideMaxMm);
-        mag = std::min(mag, room);
-        p.slideMm = mm > 0 ? mag : -mag;
+        mag = std::min(clampf(mag, kSlideMinMm, kSlideMaxMm), room);
+        p.slideMm = dir * mag;
         sliding = true;
       }
     }
@@ -339,7 +332,7 @@ AimInputs AutoAim::gatherInputs(float dx, float dy) const {
   in.dxPerMm = dxPerMm_;
   in.slideIneffective = slideIneffective_;
   in.slideProbeMm = slideProbeMm_;
-  in.slideProbeSign = kSlideProbeSign;
+  in.slideSign = kSlideSign;
   in.panSign = panSign_;
   in.tiltSign = tiltSign_;
   return in;
@@ -365,7 +358,7 @@ void AutoAim::evaluate() {
     const float movedMm = (slider_.positionSteps() - beforePos_[kSlide]) / kSlideStepsPerMm;
     const float change = dx - beforeDx_;
     if (std::fabs(movedMm) >= 1.0f && std::fabs(change) >= kSlideNoEffectDeg) {
-      dxPerMm_ = change / movedMm;
+      dxPerMm_ = std::fabs(change / movedMm);  // size only; direction stays fixed
       const float dist = aim::distanceFromSlide(dxPerMm_, dx);
       if (!std::isnan(dist)) Serial.printf("AIM slide effect %.3f deg/mm, distance ~%.1fm (est)\n",
                                            dxPerMm_, dist);

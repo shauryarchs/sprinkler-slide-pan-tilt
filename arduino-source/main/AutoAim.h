@@ -29,12 +29,12 @@ struct AimInputs {
   float panRoomMinusDeg = 0;
   float tiltRoomPlusDeg = 0;  // room left before tilt's ±360° limit
   float tiltRoomMinusDeg = 0;
-  // Measured effect of sliding: change in dx per +1 mm of slider travel.
-  // NAN until a slide has been measured in this engagement.
+  // Measured size of the slide effect: |change in dx| per mm of slider
+  // travel. Sizes slides only (never their direction). NAN until measured.
   float dxPerMm = NAN;
   bool slideIneffective = false;  // slides barely move the view (far fire)
   float slideProbeMm = 50.0f;     // size of the next probe slide
-  int slideProbeSign = 1;  // probe direction: +1 = slide + for a hotspot on the right
+  int slideSign = -1;      // fixed slide direction: slider moves sign*sign(dx)
   int panSign = 1;         // +1 = positive pan turns the view right
   int tiltSign = 1;        // +1 = positive tilt turns the view up
 };
@@ -89,13 +89,16 @@ float distanceFromSlide(float dxPerMm, float dxDeg);
 class AutoAim {
  public:
   // --- Motor direction constants (verify on hardware) -----------------
-  // If a move makes the error grow, the firmware reverses that axis once
-  // at runtime and prints which constant to change; a second divergence
-  // turns auto-aim off. Slide direction is measured, so its constant
-  // only sets the direction of the very first probe.
-  // -1 confirmed on hardware (2026-10-11): with +1 the first slide always
-  // started away from the hotspot and had to re-correct.
-  static constexpr int kSlideProbeSign = -1;
+  // Slide direction is FIXED by kSlideSign and never reversed at runtime:
+  // a hotspot on the right always slides the carriage kSlideSign * (+).
+  // -1 confirmed on hardware (2026-10-11). Learning it from measurements
+  // was removed because moving the flame during a slide made the firmware
+  // wrongly reverse. If the camera is ever mounted facing the other way,
+  // flip this constant.
+  // For pan / tilt: if a move makes the error grow, that axis is reversed
+  // once at runtime (prints which constant to change); a second
+  // divergence turns auto-aim off.
+  static constexpr int kSlideSign = -1;
   static constexpr int kPanSign = 1;
   static constexpr int kTiltSign = 1;
 
