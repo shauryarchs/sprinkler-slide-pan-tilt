@@ -51,7 +51,15 @@ AimPlan aim::planCorrection(const AimInputs& in) {
       } else {
         mm = signOf(in.dxDeg) * in.slideProbeSign * in.slideProbeMm;  // probe
       }
-      const float room = mm > 0 ? in.slideRoomPlusMm : in.slideRoomMinusMm;
+      float room = mm > 0 ? in.slideRoomPlusMm : in.slideRoomMinusMm;
+      // Slide direction not measured yet and the guessed direction has no
+      // room (e.g. carriage parked at the home switch): probe the other
+      // way. The measurement then reveals the true direction.
+      const bool measured = !std::isnan(in.dxPerMm) && in.dxPerMm != 0.0f;
+      if (!measured && room < kSlideMinMm) {
+        mm = -mm;
+        room = mm > 0 ? in.slideRoomPlusMm : in.slideRoomMinusMm;
+      }
       if (room >= kSlideMinMm) {
         float mag = clampf(std::fabs(mm), kSlideMinMm, kSlideMaxMm);
         mag = std::min(mag, room);
