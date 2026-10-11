@@ -41,32 +41,44 @@ AimPlan aim::planCorrection(const AimInputs& in) {
   }
 
   if (needX) {
-    // 1. Slide first, while the camera faces roughly perpendicular to the
-    //    rail and sliding still changes the view.
-    bool sliding = false;
-    if (std::fabs(in.panDeg) <= kSlideMaxPanDeg && !in.slideIneffective) {
-      // Direction is fixed (slideSign); only the distance is learned.
-      const int dir = signOf(in.dxDeg) * in.slideSign;
-      float mag;
-      if (!std::isnan(in.dxPerMm) && in.dxPerMm > 0.0f) {
-        mag = std::fabs(in.dxDeg) / in.dxPerMm * kGain;  // measured: size the slide
+    // Hotspot angle from the rail's outward direction ("straight out"),
+    // as seen from the current carriage position. This is what dx would
+    // be with pan at 0°. Facing backward (tilted past 90°) reverses which
+    // way pan turns the view.
+    const int panView = in.panSign * (tiltInverted(in.tiltDeg) ? -1 : 1);
+    const float bearing = in.dxDeg + panView * in.panDeg;
+    const bool panAtZero = std::fabs(in.panDeg) <= kPanZeroTolDeg;
+    bool handled = false;
+
+    // 1. Slide first, if the slider has room toward the hotspot. Pan
+    //    goes back to 0° before sliding. Direction is fixed (slideSign);
+    //    only the distance is learned.
+    const int dir = signOf(panAtZero ? in.dxDeg : bearing) * in.slideSign;
+    const float room = dir > 0 ? in.slideRoomPlusMm : in.slideRoomMinusMm;
+    if (!in.slideIneffective && room >= kSlideMinMm) {
+      if (!panAtZero && std::fabs(bearing) <= kReturnPanMaxBearingDeg) {
+        p.panDeg = -in.panDeg;  // return to 0° in one move, then slide
+        p.panReturn = true;
       } else {
-        mag = in.slideProbeMm;  // first probe
-      }
-      const float room = dir > 0 ? in.slideRoomPlusMm : in.slideRoomMinusMm;
-      if (room >= kSlideMinMm) {
+        const float err = panAtZero ? std::fabs(in.dxDeg) : std::fabs(bearing);
+        float mag;
+        if (!std::isnan(in.dxPerMm) && in.dxPerMm > 0.0f) {
+          mag = err / in.dxPerMm * kGain;  // measured: size the slide
+        } else {
+          mag = in.slideProbeMm;  // first probe
+        }
         mag = std::min(clampf(mag, kSlideMinMm, kSlideMaxMm), room);
         p.slideMm = dir * mag;
-        sliding = true;
       }
+      handled = true;
     }
-    // 2. Pan only when sliding can't do the job. Facing backward (tilted
-    //    past 90°) reverses which way pan turns the view.
-    if (!sliding) {
-      const int sign = in.panSign * (tiltInverted(in.tiltDeg) ? -1 : 1);
-      float d = clampf(sign * in.dxDeg * kGain, -kMaxPanStepDeg, kMaxPanStepDeg);
-      const float room = d > 0 ? in.panRoomPlusDeg : in.panRoomMinusDeg;
-      if (std::fabs(d) > room) d = d > 0 ? room : -room;
+
+    // 2. Pan to aim only when sliding can't reach: no room toward the
+    //    hotspot (beyond the end of the rail) or sliding has no effect.
+    if (!handled) {
+      float d = clampf(panView * in.dxDeg * kGain, -kMaxPanStepDeg, kMaxPanStepDeg);
+      const float proom = d > 0 ? in.panRoomPlusDeg : in.panRoomMinusDeg;
+      if (std::fabs(d) > proom) d = d > 0 ? proom : -proom;
       if (std::fabs(d) < kMinPanStepDeg) {
         d = 0;
         p.horizontalBlocked = true;
@@ -370,10 +382,14 @@ void AutoAim::evaluate() {
       Serial.printf("AIM small slide effect, probing %.0fmm next\n", slideProbeMm_);
     }
   }
-  if (lastMoved_[kPan] && std::fabs(dx) > std::fabs(beforeDx_) + kDivergeDeg) {
+  if (lastMoved_[kPan] && !lastPanWasReturn_ &&
+      std::fabs(dx) > std::fabs(beforeDx_) + kDivergeDeg) {
     if (panFlipped_) {
-      Serial.println("AIM aborted: pan moved the target away again. Auto-aim OFF.");
-      setEnabled(false);
+      Serial.println("AIM pan moved the target away again (moving target?), pausing");
+      for (int i = 0; i < kAxes; i++) lastMoved_[i] = false;
+      lastPanWasReturn_ = false;
+      state_ = State::Paused;
+      pausedUntilMs_ = millis() + kUserPauseMs;
       return;
     }
     panSign_ = -panSign_;
@@ -383,8 +399,11 @@ void AutoAim::evaluate() {
   }
   if (lastMoved_[kTilt] && std::fabs(dy) > std::fabs(beforeDy_) + kDivergeDeg) {
     if (tiltFlipped_) {
-      Serial.println("AIM aborted: tilt moved the target away again. Auto-aim OFF.");
-      setEnabled(false);
+      Serial.println("AIM tilt moved the target away again (moving target?), pausing");
+      for (int i = 0; i < kAxes; i++) lastMoved_[i] = false;
+      lastPanWasReturn_ = false;
+      state_ = State::Paused;
+      pausedUntilMs_ = millis() + kUserPauseMs;
       return;
     }
     tiltSign_ = -tiltSign_;
@@ -393,6 +412,7 @@ void AutoAim::evaluate() {
                   "to make it permanent\n", tiltSign_);
   }
   for (int i = 0; i < kAxes; i++) lastMoved_[i] = false;
+  lastPanWasReturn_ = false;
 
   // --- Decide the next move ------------------------------------------
   const AimPlan plan = aim::planCorrection(gatherInputs(dx, dy));
@@ -426,8 +446,14 @@ void AutoAim::evaluate() {
   beforeDx_ = dx;
   beforeDy_ = dy;
   for (int i = 0; i < kAxes; i++) beforePos_[i] = axisPos(i);
-  Serial.printf("AIM step %d: slide%+.0fmm pan%+.1fdeg tilt%+.1fdeg (dx=%+.1f dy=%+.1f)\n", steps_,
-                plan.slideMm, plan.panDeg, plan.tiltDeg, dx, dy);
+  lastPanWasReturn_ = plan.panReturn;
+  if (plan.panReturn) {
+    Serial.printf("AIM step %d: returning pan to 0deg before sliding (pan%+.1fdeg tilt%+.1fdeg)\n",
+                  steps_, plan.panDeg, plan.tiltDeg);
+  } else {
+    Serial.printf("AIM step %d: slide%+.0fmm pan%+.1fdeg tilt%+.1fdeg (dx=%+.1f dy=%+.1f)\n", steps_,
+                  plan.slideMm, plan.panDeg, plan.tiltDeg, dx, dy);
+  }
   startMove(plan);
 }
 

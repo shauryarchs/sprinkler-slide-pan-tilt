@@ -12,11 +12,12 @@ class ThermalCamera;
 // Correction planner (pure function — no hardware, unit-testable).
 //
 // Given where the hotspot is in the thermal image and where the axes
-// are, decide the next move. Horizontal error is fixed by SLIDING first;
-// pan is only used when the slider has no room left in the needed
-// direction, sliding no longer changes the view (distant fire), or the
-// arm is panned too far for sliding to move the view sideways. Vertical
-// error is fixed by tilt.
+// are, decide the next move. Horizontal error is fixed by SLIDING first:
+// if the slider has room toward the hotspot, pan is first returned to 0°
+// and then the carriage slides. Pan is only used to aim when the slider
+// has no room left toward the hotspot (it is beyond the end of the rail)
+// or sliding no longer changes the view (distant fire). Vertical error
+// is fixed by tilt.
 // ---------------------------------------------------------------------
 struct AimInputs {
   float dxDeg = 0;            // hotspot offset, + = right of image center
@@ -44,6 +45,7 @@ struct AimPlan {
   float slideMm = 0;       // signed slider move (+ = toward far end)
   float panDeg = 0;        // signed pan move
   float tiltDeg = 0;       // signed tilt move
+  bool panReturn = false;  // panDeg is a return to 0° before sliding
   bool horizontalBlocked = false;  // no slide room and no pan room left
   bool verticalBlocked = false;    // no tilt room left
 };
@@ -64,9 +66,11 @@ constexpr float kMinTiltStepDeg = 0.5f;
 constexpr float kSlideProbeMm = 50.0f;
 constexpr float kSlideMinMm = 5.0f;
 constexpr float kSlideMaxMm = 300.0f;
-// Sliding moves the view sideways only when the camera faces roughly
-// perpendicular to the rail.
-constexpr float kSlideMaxPanDeg = 15.0f;
+// Before sliding, pan is returned to 0° if it is further off than this.
+constexpr float kPanZeroTolDeg = 1.0f;
+// ...unless the hotspot would then be outside the camera's view (half
+// FOV is 55°): slide first while panned, return pan once it's closer.
+constexpr float kReturnPanMaxBearingDeg = 50.0f;
 
 // True when tilt has turned the camera to face backward (upside down).
 bool tiltInverted(float tiltDeg);
@@ -97,7 +101,7 @@ class AutoAim {
   // flip this constant.
   // For pan / tilt: if a move makes the error grow, that axis is reversed
   // once at runtime (prints which constant to change); a second
-  // divergence turns auto-aim off.
+  // divergence just pauses. Auto-aim only turns off with "aim off".
   static constexpr int kSlideSign = -1;
   // -1 confirmed on hardware (2026-10-11): with +1 pan turned away from
   // the hotspot once the slider reached its limit.
@@ -190,6 +194,7 @@ class AutoAim {
   int tiltSign_ = kTiltSign;
   bool panFlipped_ = false;
   bool tiltFlipped_ = false;
+  bool lastPanWasReturn_ = false;  // deliberate return to 0°: skip wrong-way check
 
   // Last move, for divergence checks and slide measurement.
   bool lastMoved_[kAxes] = {false, false, false};
