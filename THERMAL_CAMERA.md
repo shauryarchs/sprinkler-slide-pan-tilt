@@ -4,8 +4,9 @@ This guide connects a **Waveshare MLX90640-D110** thermal camera to the **Arduin
 
 - **Phase 1, USB view (sections 1–8):** a standalone test sketch streams the live raw thermal image to a Chrome viewer. Use it to check wiring and see the full image.
 - **Phase 2, main firmware (section 9):** the camera runs inside the motor firmware and reports hotspots (direction, temperature) to the Serial Monitor while the motors work.
+- **Auto-aim (section 10):** optional test mode that slides, then pans/tilts, to center a hotspot. Off at every boot.
 
-Nothing is sent to the EmberSensor Worker, website, or iOS app in either phase, and the camera never moves a motor or switches water.
+Nothing is sent to the EmberSensor Worker, website, or iOS app. The camera only moves motors when auto-aim test mode is switched on (section 10), and nothing switches water.
 
 Tracking issues: shauryarchs/embersensor-site#46 (Phase 1), shauryarchs/embersensor-site#49 (Phase 2)
 
@@ -207,3 +208,89 @@ A `hotspot=yes` line is also printed immediately when heat appears or clears.
 ### Notes
 - The Chrome viewer does **not** work with the main firmware (it only prints status lines, not full images). To see the full live image, upload the Phase 1 test sketch.
 - The distance estimate assumes flat ground and needs calibration; it stays `n/a` until configured. A more general estimate (triangulating from two slider positions) belongs with automatic aiming (#52).
+
+## 10. Auto-aim (test mode)
+
+Auto-aim moves the arm so a confirmed hotspot ends up in the **centre** of the thermal image, which means the nozzle points at it. Tracking issue: shauryarchs/embersensor-site#52.
+
+**Off at every boot.** It only runs after you type `aim on` in the Serial Monitor, so the laptop must be plugged in (someone is physically there). No water is switched; there is no pump yet (#53).
+
+### How it aims
+1. **Left/right: slide first.** The carriage slides along the rail toward the hotspot. The first slide is a short probe (50 mm). How far the hotspot moved per mm tells the firmware how far to slide next, and gives a **distance estimate**. If a probe barely moves the view, the next one is bigger (100 mm, then up to 300 mm).
+2. **Pan only if needed:** when the carriage reaches the end of the rail (limit switch at the home end, 975 mm soft limit at the far end), or when even a long slide barely changes the view (a fire roughly 15 m+ away).
+3. **Up/down: tilt.**
+4. After every move it stops, waits for 3 fresh frames (~0.75 s), and looks again. Once the hotspot is within about one pixel of centre it holds still (`AIM on-target ...`).
+
+### Safety
+- **Only at the menu.** Entering Motor 1/2/3 or Patrol mode, turning or pressing the encoder, or any command from the website stops auto-aim's motion immediately and pauses it for 5 s. Your controls always win.
+- **Limits:** every move goes through the motors' existing limits: slider limit switch and 5–975 mm, pan ±105°, **tilt never more than 360° either way from the boot zero** (cable protection).
+- **Wrong-way check:** if a pan or tilt move makes the error **bigger**, that axis is reversed once and the firmware prints which constant to change. A second wrong-way move turns auto-aim **off**. Slide direction is measured, so it corrects itself.
+- Gives up after 25 steps, or when a limit stops it from centring, and pauses instead of hunting forever.
+
+### Commands (Serial Monitor, 115200 baud)
+
+| Command | Effect |
+|---|---|
+| `aim on` | Enable auto-aim (test mode) |
+| `aim off` | Disable and stop any auto-aim motion |
+| `aim status` | Print state, positions, current dx/dy, learned directions |
+
+### Output
+
+```
+AIM on (test mode, no water). Acts only at the menu; any input pauses it. Type 'aim off' to stop.
+AIM hotspot acquired
+AIM step 1: slide+50mm pan+0.0deg tilt+0.0deg (dx=+30.9 dy=-0.5)
+AIM small slide effect, probing 100mm next
+AIM slide effect -0.010 deg/mm, distance ~4.2m (est)
+AIM slider reached its limit
+AIM step 5: slide+0mm pan+10.0deg tilt+0.0deg (dx=+26.8 dy=-0.3)
+AIM on-target slider=975mm pan=25.1deg tilt=0.0deg dist=~6.4m(est)
+AIM pan direction reversed at runtime; set AutoAim::kPanSign = -1 to make it permanent
+AIM paused (user input)
+AIM lost, back to waiting
+```
+
+### Before the first test
+- The camera must be **mounted on the arm** (section 3) so it moves with the slider, pan, and tilt. It can be temporarily clamped for testing.
+- At the boot **pan-setup screen**, set pan 0° so the camera faces **straight out, perpendicular to the rail**. Sliding only shifts the view sideways in that position.
+- At the **tilt-setup screen**, set tilt 0° roughly level.
+- Clear the rail and the arm's swing area.
+
+### Step-by-step test (needs the mounted camera)
+
+| Step | Action | Expected result |
+|---|---|---|
+| 1 | Upload `main.ino`, open the Serial Monitor, finish the boot pan/tilt setup, stay at the menu. | `THERMAL camera=ok ...`; no `AIM` lines (auto-aim is off). |
+| 2 | Put a safe heat source (mug of just-boiled water, candle in a holder) ~1–2 m in front, **off to one side**. Type `aim on`. | `AIM hotspot acquired`, then `AIM step` lines with **slide** moves; the carriage slides toward the heat source. |
+| 3 | Watch until it settles. | `AIM on-target ...`; `THERMAL ... dx` near 0. Pan stays near 0° if the source is within the rail's reach. |
+| 4 | Move the heat source **beyond the end of the rail** (further to that side). | Slider runs to the end (`AIM slider reached its limit`), then **pan** finishes centring. |
+| 5 | Raise the heat source higher than the camera. | **Tilt** moves up; `dy` ends near 0. |
+| 6 | While it's moving, turn the encoder one click. | Motion stops immediately; `AIM paused (user input)`; it resumes ~5 s later. |
+| 7 | Enter Motor 1 mode from the menu. | Auto-aim never moves anything while you're in a motor mode. |
+| 8 | Remove the heat source. | After ~2 s `hotspot=no`, then `AIM hotspot not visible, holding position` and `AIM lost, back to waiting`. |
+| 9 | Type `aim off`. | `AIM off`; nothing moves on its own. |
+
+**If you see `AIM pan direction reversed` or `AIM tilt direction reversed`:** set the constant it names (`kPanSign` or `kTiltSign` in `AutoAim.h`) to that value and re-upload, so it is correct from the first move next time.
+
+### Tuning (`arduino-source/main/AutoAim.h`)
+
+| Constant | Default | Meaning |
+|---|---|---|
+| `kSlideProbeSign`, `kPanSign`, `kTiltSign` | 1 | Motor direction vs. image direction (see above) |
+| `aim::kDeadbandXDeg` / `kDeadbandYDeg` | 3.4 / 3.1 | "Close enough" (≈1 pixel) |
+| `aim::kGain` | 0.7 | Fraction of the error corrected per step |
+| `aim::kSlideProbeMm`, `kSlideMaxMm` | 50 / 300 | First probe slide; largest single slide |
+| `aim::kSlideMaxPanDeg` | 15 | Slide only while pan is within ±15° (facing the rail's outward direction) |
+| `kSlideSpeed`, `kPanTiltSpeed` | 18 / 6 | Movement speeds (same 0–20 scale as the encoder) |
+| `kMaxStepsPerEngagement` | 25 | Steps before giving up |
+
+### What was validated where (auto-aim)
+
+| Check | Done in software | Needs your hardware |
+|---|---|---|
+| Firmware compiles; no warnings from project code; 30% flash, 22% RAM | ✅ | |
+| Simulated rail + motors + thermal camera geometry, 19/19 scenarios pass: off by default; fire within rail reach centred by sliding only (pan stays 0) with distance estimate; fire beyond rail → slider to end, then pan; distant fire (30 m) → pan; higher ground → tilt up; camera tilted 180° (looking behind) centres with pan inversion; reversed pan / tilt motor learned and named; reversed slide direction measured; tilt never past 360°; user input stops motion instantly; no motion outside the menu; lost hotspot handled; `aim off` | ✅ | |
+| Real motor directions vs. image (constants) | | ✅ steps 2–5 |
+| Real centring, settle time, no oscillation | | ✅ steps 3–5 |
+| User override on real hardware | | ✅ steps 6–7 |

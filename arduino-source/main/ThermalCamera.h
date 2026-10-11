@@ -94,6 +94,11 @@ class ThermalCamera {
   // Thread-safe copy of the latest smoothed state.
   ThermalSnapshot snapshot();
 
+  // Discard smoothed position history so the next frames start fresh.
+  // Auto-aim calls this after each move so pre-move readings don't
+  // blend into the new position.
+  void restartSmoothing() { restartRequested_ = true; }
+
  private:
   static void taskTrampoline(void* arg);
   void run();
@@ -104,6 +109,8 @@ class ThermalCamera {
   TiltMotor3& tilt_;
   portMUX_TYPE lock_ = portMUX_INITIALIZER_UNLOCKED;
   ThermalSnapshot state_;  // guarded by lock_
+
+  volatile bool restartRequested_ = false;  // set by any task, consumed by thermal task
 
   // Task-only working state.
   bool started_ = false;
