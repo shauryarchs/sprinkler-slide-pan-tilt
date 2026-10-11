@@ -130,6 +130,11 @@ bool ThermalCamera::tryStart() {
 }
 
 void ThermalCamera::processFrame() {
+  if (restartRequested_) {
+    restartRequested_ = false;
+    smoothValid_ = false;
+  }
+
   // Hottest pixel and median background.
   int valid = 0, hotIdx = -1;
   float maxT = -INFINITY;

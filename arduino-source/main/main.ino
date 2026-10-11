@@ -2,6 +2,7 @@
 #include <Wire.h>
 
 #include "AppState.h"
+#include "AutoAim.h"
 #include "CommandPoller.h"
 #include "Display.h"
 #include "Encoder.h"
@@ -45,6 +46,9 @@ CommandPoller commandPoller;
 // Thermal camera on Wire1 (A0/A1). Reports hotspots to the Serial
 // Monitor only — it never moves a motor.
 ThermalCamera thermalCamera(tiltMotor3);
+// Thermal-guided aiming: slide first, then pan/tilt. OFF at every boot;
+// enabled from the Serial Monitor ("aim on") and only acts at the menu.
+AutoAim autoAim(sliderMotor1, panMotor2, tiltMotor3, limitSwitch, thermalCamera);
 
 // UI state machine: the menu is the resting screen; selecting an item
 // hands the encoder over to that motor's control logic. Short-press
@@ -200,10 +204,12 @@ void setup() {
 void handleMenu() {
   int delta = encoder.consumeDelta();
   if (delta != 0) {
+    autoAim.notifyUserActivity();
     int step = (delta > 0) ? 1 : -1;
     menuIndex = (menuIndex + step + kMenuItemCount) % kMenuItemCount;
   }
   if (encoder.consumeShortPress()) {
+    autoAim.notifyUserActivity();
     switch (menuIndex) {
       case 0: enterMotor1(); break;
       case 1: enterMotor2(); break;
@@ -363,6 +369,8 @@ void handleTiltSetup() {
 // intentionally ignore PanSetup / TiltSetup target modes — that flow
 // is one-shot at boot and not exposed to the remote.
 void dispatchRemoteCommand(const RemoteCommand& cmd) {
+  // Any remote command takes priority over auto-aim.
+  autoAim.notifyUserActivity();
   switch (cmd.kind) {
     case RemoteCmdKind::EnterMode:
       switch (cmd.targetMode) {
@@ -427,6 +435,7 @@ void dispatchRemoteCommand(const RemoteCommand& cmd) {
 
 void loop() {
   encoder.update();
+  autoAim.pollSerial();
 
   // Drain any commands the CommandPoller task has queued. Bounded by
   // the queue depth (4); typically 0 or 1 per iteration.
@@ -444,6 +453,10 @@ void loop() {
     case Mode::PanSetup:         handlePanSetup();  break;
     case Mode::TiltSetup:        handleTiltSetup(); break;
   }
+
+  // Auto-aim only acts while idle at the menu; motor modes and the boot
+  // setup screens own the motors.
+  autoAim.update(mode == Mode::Menu);
 
   if (millis() - lastDisplayUpdateMs >= kDisplayIntervalMs) {
     switch (mode) {
