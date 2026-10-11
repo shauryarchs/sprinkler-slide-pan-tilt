@@ -93,7 +93,9 @@ class AutoAim {
   // at runtime and prints which constant to change; a second divergence
   // turns auto-aim off. Slide direction is measured, so its constant
   // only sets the direction of the very first probe.
-  static constexpr int kSlideProbeSign = 1;
+  // -1 confirmed on hardware (2026-10-11): with +1 the first slide always
+  // started away from the hotspot and had to re-correct.
+  static constexpr int kSlideProbeSign = -1;
   static constexpr int kPanSign = 1;
   static constexpr int kTiltSign = 1;
 

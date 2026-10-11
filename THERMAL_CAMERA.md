@@ -277,7 +277,8 @@ AIM lost, back to waiting
 
 | Constant | Default | Meaning |
 |---|---|---|
-| `kSlideProbeSign`, `kPanSign`, `kTiltSign` | 1 | Motor direction vs. image direction (see above) |
+| `kSlideProbeSign` | **-1** | Direction of the first slide for a hotspot on the right. −1 confirmed on hardware; with +1 the first slide started the wrong way |
+| `kPanSign`, `kTiltSign` | 1 | Motor direction vs. image direction (see above) |
 | `aim::kDeadbandXDeg` / `kDeadbandYDeg` | 3.4 / 3.1 | "Close enough" (≈1 pixel) |
 | `aim::kGain` | 0.7 | Fraction of the error corrected per step |
 | `aim::kSlideProbeMm`, `kSlideMaxMm` | 50 / 300 | First probe slide; largest single slide |
