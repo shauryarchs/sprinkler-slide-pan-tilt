@@ -35,7 +35,7 @@ struct AimInputs {
   bool slideIneffective = false;  // slides barely move the view (far fire)
   float slideProbeMm = 50.0f;     // size of the next probe slide
   int slideSign = -1;      // fixed slide direction: slider moves sign*sign(dx)
-  int panSign = 1;         // +1 = positive pan turns the view right
+  int panSign = -1;        // +1 = positive pan turns the view right
   int tiltSign = 1;        // +1 = positive tilt turns the view up
 };
 
@@ -99,7 +99,9 @@ class AutoAim {
   // once at runtime (prints which constant to change); a second
   // divergence turns auto-aim off.
   static constexpr int kSlideSign = -1;
-  static constexpr int kPanSign = 1;
+  // -1 confirmed on hardware (2026-10-11): with +1 pan turned away from
+  // the hotspot once the slider reached its limit.
+  static constexpr int kPanSign = -1;
   static constexpr int kTiltSign = 1;
 
   // --- Motion ---------------------------------------------------------

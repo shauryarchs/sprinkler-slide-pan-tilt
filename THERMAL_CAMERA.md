@@ -278,7 +278,8 @@ AIM lost, back to waiting
 | Constant | Default | Meaning |
 |---|---|---|
 | `kSlideSign` | **-1** | Fixed slide direction for a hotspot on the right; never reversed at runtime. −1 confirmed on hardware. Flip only if the camera is mounted facing the other way |
-| `kPanSign`, `kTiltSign` | 1 | Motor direction vs. image direction (see above) |
+| `kPanSign` | **-1** | Pan direction vs. image direction. −1 confirmed on hardware; with +1 pan turned away from the hotspot |
+| `kTiltSign` | 1 | Tilt direction vs. image direction (confirmed on hardware) |
 | `aim::kDeadbandXDeg` / `kDeadbandYDeg` | 3.4 / 3.1 | "Close enough" (≈1 pixel) |
 | `aim::kGain` | 0.7 | Fraction of the error corrected per step |
 | `aim::kSlideProbeMm`, `kSlideMaxMm` | 50 / 300 | First probe slide; largest single slide |
