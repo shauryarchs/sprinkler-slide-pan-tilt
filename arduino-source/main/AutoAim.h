@@ -189,6 +189,7 @@ class AutoAim {
   bool enabled_ = kEnabledAtBoot;
   State state_ = kEnabledAtBoot ? State::Waiting : State::Off;
   bool announced_ = false;  // boot status printed once Serial is up
+  bool atMenu_ = false;     // last idle flag from update(), for status
   unsigned long stateSinceMs_ = 0;
   unsigned long settleStartFrames_ = 0;
   unsigned long pausedUntilMs_ = 0;

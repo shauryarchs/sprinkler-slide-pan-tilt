@@ -205,10 +205,15 @@ void AutoAim::pollSerial() {
 
 void AutoAim::printStatus() {
   const ThermalSnapshot s = thermal_.snapshot();
-  Serial.printf("AIM status=%s enabled=%s slider=%.0fmm pan=%.1fdeg tilt=%.1fdeg "
+  Serial.printf("AIM status=%s enabled=%s atMenu=%s slider=%.0fmm pan=%.1fdeg tilt=%.1fdeg "
                 "hotspot=%s dx=%+.1f dy=%+.1f panSign=%d tiltSign=%d\n",
-                stateName(), enabled_ ? "yes" : "no", sliderMm(), panDeg(), tiltDeg(),
-                s.hotspot ? "yes" : "no", s.dxDeg, s.dyDeg, panSign_, tiltSign_);
+                stateName(), enabled_ ? "yes" : "no", atMenu_ ? "yes" : "no", sliderMm(),
+                panDeg(), tiltDeg(), s.hotspot ? "yes" : "no", s.dxDeg, s.dyDeg, panSign_,
+                tiltSign_);
+  if (enabled_ && !atMenu_) {
+    Serial.println("AIM note: only acts at the menu - finish the pan/tilt setup screens or "
+                   "leave the motor mode");
+  }
 }
 
 void AutoAim::notifyUserActivity() {
@@ -237,6 +242,7 @@ void AutoAim::update(bool idle) {
                      "Type 'aim off' to disable until reboot.");
     }
   }
+  atMenu_ = idle;
   if (!enabled_) return;
 
   if (!idle) {

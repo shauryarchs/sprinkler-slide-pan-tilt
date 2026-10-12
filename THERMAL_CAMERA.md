@@ -237,7 +237,7 @@ Auto-aim moves the arm so a confirmed hotspot ends up in the **centre** of the t
 |---|---|
 | `aim on` | Re-enable auto-aim after `aim off` (it's already on at boot) |
 | `aim off` | Disable and stop any auto-aim motion until the next reboot |
-| `aim status` | Print state, positions, current dx/dy, learned directions |
+| `aim status` | Print state, whether it's at the menu (`atMenu`), positions, current dx/dy, learned directions. If `atMenu=no`, finish the boot pan/tilt setup or leave the motor mode |
 
 ### Output
 
