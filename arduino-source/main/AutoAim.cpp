@@ -169,8 +169,8 @@ void AutoAim::setEnabled(bool on) {
     enabled_ = true;
     state_ = State::Waiting;
     stateSinceMs_ = millis();
-    Serial.println("AIM on (test mode, no water). Acts only at the menu; any input pauses it. "
-                   "Type 'aim off' to stop.");
+    Serial.println("AIM on (no water yet). Acts only at the menu; any input pauses it. "
+                   "Type 'aim off' to disable until reboot.");
   } else {
     stopAll();
     enabled_ = false;
@@ -230,6 +230,13 @@ void AutoAim::stopAll() {
 }
 
 void AutoAim::update(bool idle) {
+  if (!announced_) {
+    announced_ = true;
+    if (enabled_) {
+      Serial.println("AIM on at boot (no water yet). Acts only at the menu; any input pauses it. "
+                     "Type 'aim off' to disable until reboot.");
+    }
+  }
   if (!enabled_) return;
 
   if (!idle) {

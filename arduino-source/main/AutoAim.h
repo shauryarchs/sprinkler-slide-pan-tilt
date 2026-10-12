@@ -84,8 +84,10 @@ float distanceFromSlide(float dxPerMm, float dxDeg);
 // ---------------------------------------------------------------------
 // Auto-aim state machine.
 //
-// OFF at every boot. Enabled from the Serial Monitor ("aim on"), and
-// only acts while the device is idle at the menu. Moves are driven
+// ON at boot (kEnabledAtBoot). "aim off" in the Serial Monitor disables it
+// until the next reboot ("aim on" re-enables). It only acts while the
+// device is idle at the menu, i.e. after the boot pan/tilt setup screens.
+// Moves are driven
 // through each motor's own update(), so the existing soft limits and the
 // slider limit switch always apply (tilt can never pass ±360° from its
 // boot zero). Any user input pauses it. Never switches water.
@@ -118,6 +120,11 @@ class AutoAim {
   static constexpr float kNearAngleDeg = 2.0f;
   static constexpr unsigned long kStallMs = 400;  // no progress = at a limit
   static constexpr unsigned long kMoveTimeoutMs = 30000;
+
+  // --- Startup ----------------------------------------------------------
+  // true: auto-aim runs from boot (owner sign-off 2026-10-11, #56).
+  // Set to false to require "aim on" after every boot again.
+  static constexpr bool kEnabledAtBoot = true;
 
   // --- Loop -----------------------------------------------------------
   static constexpr unsigned long kSettleFrames = 3;    // fresh frames after a move
@@ -179,8 +186,9 @@ class AutoAim {
   LimitSwitch& limit_;
   ThermalCamera& thermal_;
 
-  bool enabled_ = false;
-  State state_ = State::Off;
+  bool enabled_ = kEnabledAtBoot;
+  State state_ = kEnabledAtBoot ? State::Waiting : State::Off;
+  bool announced_ = false;  // boot status printed once Serial is up
   unsigned long stateSinceMs_ = 0;
   unsigned long settleStartFrames_ = 0;
   unsigned long pausedUntilMs_ = 0;
