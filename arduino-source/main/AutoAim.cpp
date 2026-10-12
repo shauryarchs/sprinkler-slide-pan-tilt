@@ -169,8 +169,8 @@ void AutoAim::setEnabled(bool on) {
     enabled_ = true;
     state_ = State::Waiting;
     stateSinceMs_ = millis();
-    Serial.println("AIM on (test mode, no water). Acts only at the menu; any input pauses it. "
-                   "Type 'aim off' to stop.");
+    Serial.println("AIM on (no water yet). Acts only at the menu; any input pauses it. "
+                   "Type 'aim off' to disable until reboot.");
   } else {
     stopAll();
     enabled_ = false;
@@ -205,10 +205,15 @@ void AutoAim::pollSerial() {
 
 void AutoAim::printStatus() {
   const ThermalSnapshot s = thermal_.snapshot();
-  Serial.printf("AIM status=%s enabled=%s slider=%.0fmm pan=%.1fdeg tilt=%.1fdeg "
+  Serial.printf("AIM status=%s enabled=%s atMenu=%s slider=%.0fmm pan=%.1fdeg tilt=%.1fdeg "
                 "hotspot=%s dx=%+.1f dy=%+.1f panSign=%d tiltSign=%d\n",
-                stateName(), enabled_ ? "yes" : "no", sliderMm(), panDeg(), tiltDeg(),
-                s.hotspot ? "yes" : "no", s.dxDeg, s.dyDeg, panSign_, tiltSign_);
+                stateName(), enabled_ ? "yes" : "no", atMenu_ ? "yes" : "no", sliderMm(),
+                panDeg(), tiltDeg(), s.hotspot ? "yes" : "no", s.dxDeg, s.dyDeg, panSign_,
+                tiltSign_);
+  if (enabled_ && !atMenu_) {
+    Serial.println("AIM note: only acts at the menu - finish the pan/tilt setup screens or "
+                   "leave the motor mode");
+  }
 }
 
 void AutoAim::notifyUserActivity() {
@@ -230,6 +235,14 @@ void AutoAim::stopAll() {
 }
 
 void AutoAim::update(bool idle) {
+  if (!announced_) {
+    announced_ = true;
+    if (enabled_) {
+      Serial.println("AIM on at boot (no water yet). Acts only at the menu; any input pauses it. "
+                     "Type 'aim off' to disable until reboot.");
+    }
+  }
+  atMenu_ = idle;
   if (!enabled_) return;
 
   if (!idle) {

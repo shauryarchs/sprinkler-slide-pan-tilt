@@ -46,8 +46,8 @@ CommandPoller commandPoller;
 // Thermal camera on Wire1 (A0/A1). Reports hotspots to the Serial
 // Monitor only — it never moves a motor.
 ThermalCamera thermalCamera(tiltMotor3);
-// Thermal-guided aiming: slide first, then pan/tilt. OFF at every boot;
-// enabled from the Serial Monitor ("aim on") and only acts at the menu.
+// Thermal-guided aiming: slide first, then pan/tilt. ON at boot; acts
+// only at the menu. "aim off" in the Serial Monitor disables it until reboot.
 AutoAim autoAim(sliderMotor1, panMotor2, tiltMotor3, limitSwitch, thermalCamera);
 
 // UI state machine: the menu is the resting screen; selecting an item
