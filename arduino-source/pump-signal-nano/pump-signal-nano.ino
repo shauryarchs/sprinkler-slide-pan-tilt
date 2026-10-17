@@ -1,29 +1,28 @@
-// Bench test for the water pump on a SPARE Arduino Nano ESP32 and a
-// SPARE breadboard -- never the working motor/camera board. Turns the
-// pump on and off from the Serial Monitor so the relay wiring and the
-// control logic can be checked safely. See PUMP_BENCH_TEST.md for the
-// wiring and the step-by-step test.
+// Nano ESP32 side of the pump bench test: sends the one-way "spray"
+// signal to the UNO R3 that switches the pump relay
+// (arduino-source/pump-controller-uno). Run on a SPARE Nano ESP32 and a
+// SPARE breadboard -- never the working motor/camera board. See
+// PUMP_BENCH_TEST.md for the wiring and the step-by-step test.
 //
-// The relay module (SRD-05VDC-SL-C) is LOW-trigger and needs 5 V to
-// turn off, which a 3.3 V Nano ESP32 pin cannot give. So D2 drives an
-// NPN transistor that pulls the relay's IN to GND:
-//   D2 HIGH -> transistor on  -> IN = GND      -> relay ON  (pump runs)
-//   D2 LOW  -> transistor off -> IN = floating -> relay OFF (pump stops)
-// While the board is booting or unplugged, D2 is not driven high, so
-// the pump stays off.
+//   D2 HIGH (3.3 V) -> UNO pin 7 HIGH -> pump on
+//   D2 LOW          -> UNO pin 7 LOW  -> pump off
+// A resistor from UNO pin 7 to GND keeps the pump off while this board
+// is booting or unplugged. The UNO never drives this wire, so 5 V never
+// reaches the Nano.
 //
 // Serial commands (newline-terminated, case-insensitive):
-//   on           run the pump for kDefaultRunS seconds, then stop
-//   on <s>       run for <s> seconds (1 .. kMaxRunS)
+//   on           signal "spray" for kDefaultRunS seconds, then stop
+//   on <s>       signal for <s> seconds (1 .. kMaxRunS)
 //   off          stop now
-//   status       print pump state
+//   status       print signal state
 //   help         list commands
-// Every run stops by itself when its timer ends.
+// Every run stops by itself when its timer ends. The UNO has its own
+// maximum runtime as well.
 
 #include <esp_system.h>
 
 namespace pins {
-const int kPump = D2;  // unused on the main board, so the wiring carries over
+const int kPump = D2;  // to UNO pin 7; D2 is unused on the main board
 }  // namespace pins
 
 const unsigned long kDefaultRunS = 3;
@@ -45,7 +44,7 @@ const char* resetReasonName(esp_reset_reason_t r) {
     case ESP_RST_INT_WDT:
     case ESP_RST_TASK_WDT:
     case ESP_RST_WDT:      return "watchdog";
-    case ESP_RST_BROWNOUT: return "BROWNOUT (supply voltage dipped -- likely the pump surge)";
+    case ESP_RST_BROWNOUT: return "brownout (supply voltage dipped)";
     case ESP_RST_EXT:      return "reset button";
     default:               return "other";
   }
@@ -58,19 +57,19 @@ void setPump(bool on, const char* why) {
   if (on) {
     pumpStartMs = millis();
     runCount++;
-    Serial.printf("PUMP on  (run #%lu, auto-off in %lus)\n", runCount, pumpRunMs / 1000);
+    Serial.printf("SIGNAL on  (run #%lu, auto-off in %lus)\n", runCount, pumpRunMs / 1000);
   } else {
-    Serial.printf("PUMP off (%s, ran %.1fs)\n", why, (millis() - pumpStartMs) / 1000.0f);
+    Serial.printf("SIGNAL off (%s, ran %.1fs)\n", why, (millis() - pumpStartMs) / 1000.0f);
   }
 }
 
 void printStatus() {
   if (pumpOn) {
     unsigned long elapsed = millis() - pumpStartMs;
-    Serial.printf("PUMP status: on, %.1fs of %lus, runs=%lu\n", elapsed / 1000.0f,
+    Serial.printf("SIGNAL status: on, %.1fs of %lus, runs=%lu\n", elapsed / 1000.0f,
                   pumpRunMs / 1000, runCount);
   } else {
-    Serial.printf("PUMP status: off, runs=%lu\n", runCount);
+    Serial.printf("SIGNAL status: off, runs=%lu\n", runCount);
   }
 }
 
@@ -85,18 +84,18 @@ void handleCommand(char* cmd) {
     if (pumpOn) {
       setPump(false, "command");
     } else {
-      Serial.println("PUMP already off");
+      Serial.println("SIGNAL already off");
     }
   } else if (strcmp(cmd, "on") == 0 || strncmp(cmd, "on ", 3) == 0) {
     long seconds = cmd[2] ? atol(cmd + 3) : (long)kDefaultRunS;
     if (seconds < 1 || seconds > (long)kMaxRunS) {
-      Serial.printf("PUMP refused: seconds must be 1-%lu\n", kMaxRunS);
+      Serial.printf("SIGNAL refused: seconds must be 1-%lu\n", kMaxRunS);
       return;
     }
     pumpRunMs = (unsigned long)seconds * 1000;
     if (pumpOn) {
       pumpStartMs = millis();  // restart the timer with the new length
-      Serial.printf("PUMP timer reset: auto-off in %lds\n", seconds);
+      Serial.printf("SIGNAL timer reset: auto-off in %lds\n", seconds);
     } else {
       setPump(true, "command");
     }
@@ -123,15 +122,15 @@ void readCommands() {
 }
 
 void setup() {
-  // Pump off before anything else: set the level, then make it an output.
+  // Signal off before anything else: set the level, then make it an output.
   digitalWrite(pins::kPump, LOW);
   pinMode(pins::kPump, OUTPUT);
 
   Serial.begin(115200);
   delay(1500);  // give the USB serial port time to enumerate
-  Serial.println("# EmberSensor pump bench test (spare board only)");
+  Serial.println("# EmberSensor pump signal test (spare Nano -> UNO pin 7)");
   Serial.printf("# reset reason: %s\n", resetReasonName(esp_reset_reason()));
-  Serial.println("# pump is OFF. Put the pump in water before typing 'on'.");
+  Serial.println("# signal is OFF. Put the pump in water before typing 'on'.");
   printHelp();
 }
 
