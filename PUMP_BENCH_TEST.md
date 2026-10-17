@@ -118,7 +118,8 @@ with the same commands:
 |---|---|---|
 | `on` | Run the pump 3 s | Send "spray" for 3 s |
 | `on <s>` | Run `s` seconds (1–30) | Send "spray" `s` seconds (1–30) |
-| `off` | Stop now | Stop now |
+| `cycle` | — | 5 × (5 s spray, 5 s off), timed by the Nano itself |
+| `off` | Stop now | Stop now (also cancels `cycle`) |
 | `status` | Pump, signal, run count | Signal state |
 | `help` | List commands | List commands |
 
@@ -128,6 +129,10 @@ UNO safety rules:
   until the Nano's signal goes LOW and HIGH again.
 - `off` on the UNO also ignores a HIGH signal until it goes LOW.
 - Signal changes shorter than 50 ms are ignored (noise).
+
+Nano heartbeat: the built-in LED blinks once a second while the sketch
+runs, fast while signalling "spray". If the Nano's Serial Monitor stops
+responding but the LED keeps blinking, only the USB connection dropped.
 
 Both Serial Monitors can be open at once (one per board/port). If the
 Nano's normal upload stops partway, use the esptool method in
@@ -169,6 +174,23 @@ Nano's normal upload stops partway, use the esptool method in
    - Expected: pump stops within a moment (resistor pulls the signal low).
 10. Plug the Nano back in, type `on 10` on it, then pull the D2 wire out.
     - Expected: pump stops.
+
+11. **Nano deciding on its own:** type `cycle` on the Nano.
+    - Expected: the pump runs 5 s, stops 5 s, five times (50 s total),
+      even if the Nano's Serial Monitor stops responding partway. The
+      UNO's monitor logs each `SIGNAL HIGH` / `LOW`.
+
+### Known issue: pump noise drops the Nano's USB serial
+
+Owner bench test: with the pump connected, the Nano's Serial Monitor
+stops accepting commands after the pump switches off; with the pump
+disconnected it works every time. The heartbeat LED keeps blinking, so
+the Nano keeps running and only its native USB connection drops (the
+motor's switch-off spike and relay arcing). Workarounds: reopen the
+Serial Monitor or replug the Nano. Mitigations: pump on its own UNO GND
+pin, pump wires twisted and kept away from the Nano, a capacitor across
+the pump. Proper fix: a flyback diode (1N4007 / 1N5819) across the pump,
+striped end to the pump's + wire. Needed before the main build.
 
 Report the results on issue #57.
 

@@ -13,7 +13,11 @@
 // Serial commands (newline-terminated, case-insensitive):
 //   on           signal "spray" for kDefaultRunS seconds, then stop
 //   on <s>       signal for <s> seconds (1 .. kMaxRunS)
-//   off          stop now
+//   cycle        run kCycleCount times: kCycleOnS on, kCycleOffS off.
+//                Timed by the Nano itself, so it keeps going even if the
+//                USB serial connection drops (tests the Nano deciding on
+//                its own, without Serial commands).
+//   off          stop now (also cancels a cycle)
 //   status       print signal state
 //   help         list commands
 // Every run stops by itself when its timer ends. The UNO has its own
@@ -31,6 +35,9 @@ const int kPump = D2;  // to UNO pin 7; D2 is unused on the main board
 
 const unsigned long kDefaultRunS = 3;
 const unsigned long kMaxRunS = 30;  // never run longer than this per command
+const unsigned long kCycleCount = 5;
+const unsigned long kCycleOnS = 5;
+const unsigned long kCycleOffS = 5;
 const unsigned long kHeartbeatMs = 500;      // LED toggle period when idle
 const unsigned long kHeartbeatFastMs = 100;  // ...while signalling "spray"
 
@@ -38,6 +45,10 @@ bool pumpOn = false;
 unsigned long pumpStartMs = 0;
 unsigned long pumpRunMs = 0;
 unsigned long runCount = 0;
+
+bool cycleActive = false;
+unsigned long cycleStartMs = 0;
+unsigned long cyclesStarted = 0;
 
 unsigned long lastBlinkMs = 0;
 bool ledOn = false;
@@ -83,13 +94,37 @@ void printStatus() {
 }
 
 void printHelp() {
-  Serial.printf("Commands: on | on <1-%lu seconds> | off | status | help\n", kMaxRunS);
+  Serial.printf("Commands: on | on <1-%lu seconds> | cycle | off | status | help\n", kMaxRunS);
+}
+
+void cancelCycle() {
+  if (!cycleActive) return;
+  cycleActive = false;
+  Serial.printf("CYCLE cancelled after %lu of %lu\n", cyclesStarted, kCycleCount);
+}
+
+// Starts each "on" phase at a fixed time from the start; the run timer in
+// loop() ends it after kCycleOnS, leaving the rest of the period off.
+void updateCycle() {
+  if (!cycleActive || pumpOn) return;
+  unsigned long period = (kCycleOnS + kCycleOffS) * 1000;
+  if (millis() - cycleStartMs < cyclesStarted * period) return;
+  if (cyclesStarted >= kCycleCount) {
+    cycleActive = false;
+    Serial.printf("CYCLE done (%lu cycles)\n", kCycleCount);
+    return;
+  }
+  cyclesStarted++;
+  pumpRunMs = kCycleOnS * 1000;
+  Serial.printf("CYCLE %lu/%lu\n", cyclesStarted, kCycleCount);
+  setPump(true, "cycle");
 }
 
 void handleCommand(char* cmd) {
   for (char* p = cmd; *p; p++) *p = tolower(*p);
 
   if (strcmp(cmd, "off") == 0) {
+    cancelCycle();
     if (pumpOn) {
       setPump(false, "command");
     } else {
@@ -101,6 +136,7 @@ void handleCommand(char* cmd) {
       Serial.printf("SIGNAL refused: seconds must be 1-%lu\n", kMaxRunS);
       return;
     }
+    cancelCycle();
     pumpRunMs = (unsigned long)seconds * 1000;
     if (pumpOn) {
       pumpStartMs = millis();  // restart the timer with the new length
@@ -108,6 +144,14 @@ void handleCommand(char* cmd) {
     } else {
       setPump(true, "command");
     }
+  } else if (strcmp(cmd, "cycle") == 0) {
+    if (pumpOn) setPump(false, "cycle start");
+    cycleActive = true;
+    cycleStartMs = millis();
+    cyclesStarted = 0;
+    Serial.printf("CYCLE start: %lu x (%lus on, %lus off)\n", kCycleCount, kCycleOnS,
+                  kCycleOffS);
+    updateCycle();
   } else if (strcmp(cmd, "status") == 0) {
     printStatus();
   } else {
@@ -159,4 +203,5 @@ void loop() {
   if (pumpOn && millis() - pumpStartMs >= pumpRunMs) {
     setPump(false, "timer");
   }
+  updateCycle();
 }
