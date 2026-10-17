@@ -18,6 +18,10 @@
 //   help         list commands
 // Every run stops by itself when its timer ends. The UNO has its own
 // maximum runtime as well.
+//
+// Heartbeat: the built-in LED blinks once a second while the sketch is
+// running (fast while signalling "spray"). If the Serial Monitor stops
+// responding but the LED keeps blinking, only the USB connection dropped.
 
 #include <esp_system.h>
 
@@ -27,11 +31,16 @@ const int kPump = D2;  // to UNO pin 7; D2 is unused on the main board
 
 const unsigned long kDefaultRunS = 3;
 const unsigned long kMaxRunS = 30;  // never run longer than this per command
+const unsigned long kHeartbeatMs = 500;      // LED toggle period when idle
+const unsigned long kHeartbeatFastMs = 100;  // ...while signalling "spray"
 
 bool pumpOn = false;
 unsigned long pumpStartMs = 0;
 unsigned long pumpRunMs = 0;
 unsigned long runCount = 0;
+
+unsigned long lastBlinkMs = 0;
+bool ledOn = false;
 
 char cmdBuf[24];
 size_t cmdLen = 0;
@@ -125,6 +134,7 @@ void setup() {
   // Signal off before anything else: set the level, then make it an output.
   digitalWrite(pins::kPump, LOW);
   pinMode(pins::kPump, OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
 
   Serial.begin(115200);
   delay(1500);  // give the USB serial port time to enumerate
@@ -134,8 +144,17 @@ void setup() {
   printHelp();
 }
 
+void heartbeat() {
+  unsigned long now = millis();
+  if (now - lastBlinkMs < (pumpOn ? kHeartbeatFastMs : kHeartbeatMs)) return;
+  lastBlinkMs = now;
+  ledOn = !ledOn;
+  digitalWrite(LED_BUILTIN, ledOn ? HIGH : LOW);
+}
+
 void loop() {
   readCommands();
+  heartbeat();
 
   if (pumpOn && millis() - pumpStartMs >= pumpRunMs) {
     setPump(false, "timer");
