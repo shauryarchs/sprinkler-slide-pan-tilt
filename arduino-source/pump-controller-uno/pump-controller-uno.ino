@@ -171,8 +171,12 @@ void readSignal() {
 
 void setup() {
   // Relay off before anything else: HIGH on IN = off for this module.
+  // Written before AND after pinMode: on the UNO R3 the first write sets
+  // the level the pin starts with; on the UNO R4 it may not stick, so the
+  // pin would start LOW (relay on) without the second write.
   digitalWrite(pins::kRelayIn, HIGH);
   pinMode(pins::kRelayIn, OUTPUT);
+  digitalWrite(pins::kRelayIn, HIGH);
   pinMode(pins::kSignalIn, INPUT);  // external resistor to GND, no pull-up
 
   Serial.begin(115200);
@@ -204,4 +208,7 @@ void loop() {
   } else if (pumpOn) {
     stopPump("signal");
   }
+
+  // Re-assert the relay every pass so the pin always matches pumpOn.
+  setRelay(pumpOn);
 }
