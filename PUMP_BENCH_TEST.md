@@ -159,6 +159,10 @@ Report the results on issue #57.
   4th. So the pump's switch-off noise, not the relay, causes the drops.
   Next mitigations: ceramic `104` capacitor across the pump terminals,
   pump wiring moved away from the R4, flyback diode when available.
+- `loop` (30 s on / 5 s off): the R4 dropped off USB, but the pump kept
+  turning on and off on schedule. The R4 keeps running; only its USB
+  link to the laptop drops. Powered from a wall charger (no laptop) this
+  does not affect pump control.
 
 ## 6. Done in software vs. needs hardware
 
