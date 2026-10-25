@@ -9,6 +9,7 @@
 #include "LimitSwitch.h"
 #include "PanMotor2.h"
 #include "SliderMotor1.h"
+#include "Sprayer.h"
 #include "StatePusher.h"
 #include "ThermalCamera.h"
 #include "TiltMotor3.h"
@@ -27,6 +28,7 @@ const int kMotor2Step = D9;
 const int kMotor3Dir = D10;
 const int kMotor3Step = D11;
 const int kLimit = D12;
+const int kPump = D2;  // 1 kOhm -> NPN transistor -> pump relay IN
 }  // namespace pins
 
 // display.display() blocks the main loop for ~30 ms on the I2C frame
@@ -49,6 +51,39 @@ ThermalCamera thermalCamera(tiltMotor3);
 // Thermal-guided aiming: slide first, then pan/tilt. ON at boot; acts
 // only at the menu. "aim off" in the Serial Monitor disables it until reboot.
 AutoAim autoAim(sliderMotor1, panMotor2, tiltMotor3, limitSwitch, thermalCamera);
+// Water pump: sprays when auto-aim is on target. ON at boot; "spray off"
+// in the Serial Monitor disables it until reboot.
+Sprayer sprayer(pins::kPump, autoAim);
+
+// Encoder input or a website command: pause auto-aim and stop the water.
+void notifyUserActivity() {
+  autoAim.notifyUserActivity();
+  sprayer.notifyUserActivity();
+}
+
+// Serial Monitor commands ("aim ...", "spray ...", "pump ..."), one line
+// at a time, case-insensitive.
+char serialLine[24];
+size_t serialLineLen = 0;
+
+void pollSerialCommands() {
+  while (Serial.available()) {
+    const char c = static_cast<char>(Serial.read());
+    if (c != '\n' && c != '\r') {
+      if (serialLineLen < sizeof(serialLine) - 1) {
+        serialLine[serialLineLen++] = static_cast<char>(tolower(static_cast<unsigned char>(c)));
+      }
+      continue;
+    }
+    if (serialLineLen == 0) continue;
+    serialLine[serialLineLen] = '\0';
+    serialLineLen = 0;
+    if (!autoAim.handleCommand(serialLine) && !sprayer.handleCommand(serialLine)) {
+      Serial.println("Commands: aim on | aim off | aim status | spray on | spray off | "
+                     "spray status | pump on [s] | pump off");
+    }
+  }
+}
 
 // UI state machine: the menu is the resting screen; selecting an item
 // hands the encoder over to that motor's control logic. Short-press
@@ -164,6 +199,7 @@ void setup() {
   // USB serial for the thermal camera's "THERMAL ..." status lines.
   // Printing happens on the core-0 thermal task, never the motor loop.
   Serial.begin(115200);
+  sprayer.begin();  // pump off before anything else
 
   limitSwitch.begin();
   sliderMotor1.begin();
@@ -204,12 +240,12 @@ void setup() {
 void handleMenu() {
   int delta = encoder.consumeDelta();
   if (delta != 0) {
-    autoAim.notifyUserActivity();
+    notifyUserActivity();
     int step = (delta > 0) ? 1 : -1;
     menuIndex = (menuIndex + step + kMenuItemCount) % kMenuItemCount;
   }
   if (encoder.consumeShortPress()) {
-    autoAim.notifyUserActivity();
+    notifyUserActivity();
     switch (menuIndex) {
       case 0: enterMotor1(); break;
       case 1: enterMotor2(); break;
@@ -369,8 +405,8 @@ void handleTiltSetup() {
 // intentionally ignore PanSetup / TiltSetup target modes — that flow
 // is one-shot at boot and not exposed to the remote.
 void dispatchRemoteCommand(const RemoteCommand& cmd) {
-  // Any remote command takes priority over auto-aim.
-  autoAim.notifyUserActivity();
+  // Any remote command takes priority over auto-aim and stops the water.
+  notifyUserActivity();
   switch (cmd.kind) {
     case RemoteCmdKind::EnterMode:
       switch (cmd.targetMode) {
@@ -435,7 +471,7 @@ void dispatchRemoteCommand(const RemoteCommand& cmd) {
 
 void loop() {
   encoder.update();
-  autoAim.pollSerial();
+  pollSerialCommands();
 
   // Drain any commands the CommandPoller task has queued. Bounded by
   // the queue depth (4); typically 0 or 1 per iteration.
@@ -457,6 +493,7 @@ void loop() {
   // Auto-aim only acts while idle at the menu; motor modes and the boot
   // setup screens own the motors.
   autoAim.update(mode == Mode::Menu);
+  sprayer.update();
 
   if (millis() - lastDisplayUpdateMs >= kDisplayIntervalMs) {
     switch (mode) {
