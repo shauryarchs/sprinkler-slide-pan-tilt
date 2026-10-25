@@ -22,7 +22,7 @@ results with the UNO R4 version): see branch
 | Small submersible pump | Kit pump, assumed 3–5 V |
 | 5 V wall charger + cut USB cable | Pump power. Red = +5 V, black = − |
 | 100 µF electrolytic capacitor | Across the pump supply lanes, stripe to − |
-| Optional: push button | Starts/stops `loop` without the Serial Monitor |
+| Optional: push button | On/off switch for the pump, works without the Serial Monitor |
 
 ## 2. How it works
 
@@ -110,8 +110,10 @@ No extra libraries. Board: **Arduino Nano ESP32**. Serial Monitor at
 | `status` | Pump state, cycle/loop progress, run count |
 | `help` | List commands |
 
-- Button on A2: each press starts `loop`, or stops whatever is running.
-  Works after the USB connection drops.
+- Button on A2: on/off switch. Press once — pump stays on; press again —
+  it stops (also stops `cycle` / `loop`). A button run shuts off by
+  itself after 10 minutes in case it's left on. Works after the USB
+  connection drops.
 - Built-in LED: slow blink while running, fast while the pump is on. If
   the Serial Monitor drops but the LED keeps blinking, only USB dropped.
 - Nothing runs at power-up. D2 is set LOW before and after `pinMode`.
@@ -135,7 +137,8 @@ replug the Nano, or double-tap reset; the esptool method in
    - Expected: green light stays off throughout.
 4. **Add the pump.** Unplug, wire table B, pump under water, plug in the
    charger and the Nano. Type `on`, then `on 30`, then `status`.
-5. `loop` (or the button), leave it running.
+5. Press the button: pump stays on. Press again: it stops.
+6. `loop`, leave it running.
    - Expected: 10 s on / 5 s off repeating. If the Serial Monitor drops,
      the pump should keep looping and the LED keep blinking; the button
      should still stop it.
@@ -145,7 +148,8 @@ replug the Nano, or double-tap reset; the esptool method in
 - **Software (done):** compiles for `arduino:esp32:nano_nora` (core
   2.0.18-arduino.5) with all warnings on, no warnings from the sketch.
   Host simulation, 39 checks pass: off at boot, timers, input checks,
-  `on 30`, `off`, `cycle`, `loop`, button start/stop and bounce, D2
+  `on 30`, `off`, `cycle`, `loop`, button on/off toggle (10 min safety
+  stop, stops a loop or cycle) and bounce, D2
   re-asserted every loop.
 - **Needs hardware:** everything in section 6, including the transistor
   leg order and whether the Nano's USB drops with the pump running.

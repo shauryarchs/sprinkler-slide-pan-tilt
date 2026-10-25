@@ -26,8 +26,10 @@
 //   status       print state
 //   help         list commands
 //
-// Button (optional) between A2 and GND: each press starts or stops
-// "loop". It works even when the USB connection to the laptop has
+// Button (optional) between A2 and GND: an on/off switch. Press once and
+// the pump stays on; press again and it stops (also stops a cycle or
+// loop). A button run shuts off by itself after kButtonMaxRunS in case it
+// is left on. Works even when the USB connection to the laptop has
 // dropped. Nothing runs at power-up until a command or button press.
 //
 // Heartbeat: the built-in LED blinks once a second while the sketch runs
@@ -50,6 +52,7 @@ const unsigned long kCycleOffS = 5;
 const unsigned long kLoopOnS = 10;   // must be <= kMaxRunS
 const unsigned long kLoopOffS = 5;
 const unsigned long kButtonDebounceMs = 50;
+const unsigned long kButtonMaxRunS = 600;  // safety: button run stops after 10 min
 const unsigned long kHeartbeatMs = 500;      // LED toggle period when idle
 const unsigned long kHeartbeatFastMs = 100;  // ...while the pump is on
 
@@ -149,7 +152,7 @@ void updateLoop() {
   startPump(kLoopOnS, "loop");
 }
 
-// Button press toggles loop on/off.
+// Button press toggles the pump on/off.
 void readButton() {
   bool raw = digitalRead(pins::kButton) == LOW;
   unsigned long now = millis();
@@ -160,12 +163,12 @@ void readButton() {
   if (buttonRaw == buttonDown || now - buttonChangedMs < kButtonDebounceMs) return;
   buttonDown = buttonRaw;
   if (!buttonDown) return;  // act on press, not release
-  if (loopActive || pumpOn) {
+  if (loopActive || cycleActive || pumpOn) {
     cancelCycle();
     cancelLoop();
     stopPump("button");
   } else {
-    startLoop("button");
+    startPump(kButtonMaxRunS, "button");
   }
 }
 
