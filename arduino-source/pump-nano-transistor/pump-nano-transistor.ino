@@ -47,7 +47,7 @@ const unsigned long kMaxRunS = 30;
 const unsigned long kCycleCount = 5;
 const unsigned long kCycleOnS = 5;
 const unsigned long kCycleOffS = 5;
-const unsigned long kLoopOnS = 30;   // must be <= kMaxRunS
+const unsigned long kLoopOnS = 10;   // must be <= kMaxRunS
 const unsigned long kLoopOffS = 5;
 const unsigned long kButtonDebounceMs = 50;
 const unsigned long kHeartbeatMs = 500;      // LED toggle period when idle

@@ -105,7 +105,7 @@ No extra libraries. Board: **Arduino Nano ESP32**. Serial Monitor at
 | `on` | Run 3 s, then stop |
 | `on <s>` | Run `s` seconds (1–30), then stop |
 | `cycle` | 5 × (5 s on, 5 s off) |
-| `loop` | 30 s on, 5 s off, repeating until stopped |
+| `loop` | 10 s on, 5 s off, repeating until stopped |
 | `off` | Stop now (also cancels `cycle` / `loop`) |
 | `status` | Pump state, cycle/loop progress, run count |
 | `help` | List commands |
@@ -136,7 +136,7 @@ replug the Nano, or double-tap reset; the esptool method in
 4. **Add the pump.** Unplug, wire table B, pump under water, plug in the
    charger and the Nano. Type `on`, then `on 30`, then `status`.
 5. `loop` (or the button), leave it running.
-   - Expected: 30 s on / 5 s off repeating. If the Serial Monitor drops,
+   - Expected: 10 s on / 5 s off repeating. If the Serial Monitor drops,
      the pump should keep looping and the LED keep blinking; the button
      should still stop it.
 
