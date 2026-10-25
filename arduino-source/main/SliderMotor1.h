@@ -22,6 +22,10 @@ class SliderMotor1 {
   static constexpr long kMinPositionMm = 5;
   static constexpr long kMaxPositionSteps = kMaxPositionMm * kStepsPerMm;
   static constexpr long kMinPositionSteps = kMinPositionMm * kStepsPerMm;
+  // Middle of the travel: where the carriage parks after homing so the
+  // thermal camera's 110 deg view covers both sides of the rail.
+  static constexpr long kCenterPositionMm = (kMinPositionMm + kMaxPositionMm) / 2;
+  static constexpr long kCenterPositionSteps = kCenterPositionMm * kStepsPerMm;
 
   // STEP pulse must be >=1 µs on the A4988. With the timer-ISR scheme the
   // pulse is held HIGH for one timer period (kTimerPeriodUs), which is
@@ -57,6 +61,9 @@ class SliderMotor1 {
 
   void begin();
   void home(LimitSwitch& limit);
+  // Blocking move to an absolute position (clamped to the soft limits) at
+  // the homing fast speed. Used right after home() to park the carriage.
+  void moveToBlocking(long targetSteps, LimitSwitch& limit);
   void update(int dial, LimitSwitch& limit);
   // Disable the ISR-driven step output. Used when control of this
   // motor is handed off (e.g. switching to the menu or to another motor).

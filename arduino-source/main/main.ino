@@ -182,13 +182,20 @@ void enterAllMotors() {
   lastDisplayUpdateMs = 0;
 }
 
+// Home the slider, then park the carriage at the middle of the rail so the
+// thermal camera can see both sides. Blocking (~16 s for the park move).
+void homeAndCenterSlider() {
+  oled.showHomingMessage();
+  sliderMotor1.home(limitSwitch);
+  sliderMotor1.moveToBlocking(SliderMotor1::kCenterPositionSteps, limitSwitch);
+  sliderHomed = true;
+}
+
 void rehome() {
   // Long-press in Motor1 mode re-homes. Drop the encoder ISR for the
   // duration of homing, then resync after.
   encoder.suspend();
-  oled.showHomingMessage();
-  sliderMotor1.home(limitSwitch);
-  sliderHomed = true;
+  homeAndCenterSlider();
   encoder.reset();
   encoder.resume();
   encoder.syncSwState();
@@ -210,11 +217,9 @@ void setup() {
   Wire.setClock(400000);
   oled.begin();
 
-  // Motor1 boot homing; motor2 has no limit switch so we just trust
-  // its mechanical alignment at power-on.
-  oled.showHomingMessage();
-  sliderMotor1.home(limitSwitch);
-  sliderHomed = true;
+  // Motor1 boot homing (then park at the middle of the rail); motor2 has
+  // no limit switch so we just trust its mechanical alignment at power-on.
+  homeAndCenterSlider();
 
   encoder.begin();
   encoder.syncSwState();

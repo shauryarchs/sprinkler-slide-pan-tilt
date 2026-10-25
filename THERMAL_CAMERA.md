@@ -215,6 +215,8 @@ Auto-aim moves the arm so a confirmed hotspot ends up in the **centre** of the t
 
 **On at every boot** (shauryarchs/embersensor-site#56). Once you finish the boot pan/tilt setup screens and the device is at the menu, the arm aims at any confirmed hotspot by itself. Type `aim off` in the Serial Monitor to disable it until the next reboot. Auto-aim itself never switches water; spraying is section 11 (on at boot).
 
+**Starting position:** after homing (at boot and after any re-home), the slider carriage parks at the middle of the rail (490 mm), so the camera's 110° view covers both sides of the rail before aiming starts (shauryarchs/embersensor-site#58).
+
 **What counts as a hotspot:** ≥ 50 °C and ≥ 15 °C above the scene. People never trigger it, but grills, car engines, and sun-baked surfaces can. To go back to requiring `aim on` after every boot, set `AutoAim::kEnabledAtBoot = false`.
 
 ### How it aims
