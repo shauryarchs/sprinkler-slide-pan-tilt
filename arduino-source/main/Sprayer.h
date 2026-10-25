@@ -13,11 +13,12 @@ class AutoAim;
 // supply through COM/NO. D2 HIGH = pump on, D2 LOW = pump off; the pump
 // is also off while the board boots or is unplugged.
 //
-// Automatic spraying is OFF at boot (kAutoAtBoot) until validated on
-// hardware: "spray on" in the Serial Monitor enables it until reboot.
-// When enabled, the pump starts as soon as auto-aim reports on-target,
-// keeps running while auto-aim stays engaged with the target (including
-// small re-aim corrections), and stops when:
+// Automatic spraying is ON at boot (kAutoAtBoot; owner sign-off after
+// hardware validation, #53). "spray off" in the Serial Monitor disables it
+// until reboot ("spray on" re-enables). When enabled, the pump starts as
+// soon as auto-aim reports on-target, keeps running while auto-aim stays
+// engaged with the target (including small re-aim corrections), and
+// stops when:
 //   - the hotspot is lost (fire out or out of view),
 //   - auto-aim pauses or leaves the menu, or "aim off" / "spray off",
 //   - any user input (encoder or website command),
@@ -31,8 +32,9 @@ class AutoAim;
 // ---------------------------------------------------------------------
 class Sprayer {
  public:
-  // false: automatic spraying needs "spray on" after every boot.
-  static constexpr bool kAutoAtBoot = false;
+  // true: spray on target from boot (owner sign-off 2026-10-24, #53).
+  // Set to false to require "spray on" after every boot again.
+  static constexpr bool kAutoAtBoot = true;
   static constexpr unsigned long kMaxSprayMs = 60000;
   static constexpr unsigned long kCooldownMs = 10000;
   static constexpr unsigned long kManualDefaultS = 3;

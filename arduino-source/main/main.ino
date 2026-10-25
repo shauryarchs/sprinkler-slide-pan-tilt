@@ -51,8 +51,8 @@ ThermalCamera thermalCamera(tiltMotor3);
 // Thermal-guided aiming: slide first, then pan/tilt. ON at boot; acts
 // only at the menu. "aim off" in the Serial Monitor disables it until reboot.
 AutoAim autoAim(sliderMotor1, panMotor2, tiltMotor3, limitSwitch, thermalCamera);
-// Water pump: sprays when auto-aim is on target. Automatic spraying is OFF
-// at boot; "spray on" in the Serial Monitor enables it until reboot.
+// Water pump: sprays when auto-aim is on target. ON at boot; "spray off"
+// in the Serial Monitor disables it until reboot.
 Sprayer sprayer(pins::kPump, autoAim);
 
 // Encoder input or a website command: pause auto-aim and stop the water.

@@ -47,7 +47,8 @@ void Sprayer::notifyUserActivity() {
 void Sprayer::update() {
   if (!announced_) {
     announced_ = true;
-    Serial.println(autoEnabled_ ? "SPRAY auto on at boot"
+    Serial.println(autoEnabled_ ? "SPRAY auto on at boot: pump runs when auto-aim is on target. "
+                                  "Type 'spray off' to disable until reboot."
                                 : "SPRAY auto off (type 'spray on' to spray when on target)");
   }
 
