@@ -169,7 +169,7 @@ void AutoAim::setEnabled(bool on) {
     enabled_ = true;
     state_ = State::Waiting;
     stateSinceMs_ = millis();
-    Serial.println("AIM on (no water yet). Acts only at the menu; any input pauses it. "
+    Serial.println("AIM on. Acts only at the menu; any input pauses it. "
                    "Type 'aim off' to disable until reboot.");
   } else {
     stopAll();
@@ -179,28 +179,19 @@ void AutoAim::setEnabled(bool on) {
   }
 }
 
-void AutoAim::pollSerial() {
-  while (Serial.available()) {
-    const char c = static_cast<char>(Serial.read());
-    if (c != '\n' && c != '\r') {
-      if (serialLen_ < sizeof(serialBuf_) - 1) {
-        serialBuf_[serialLen_++] = static_cast<char>(tolower(static_cast<unsigned char>(c)));
-      }
-      continue;
-    }
-    if (serialLen_ == 0) continue;
-    serialBuf_[serialLen_] = '\0';
-    serialLen_ = 0;
-    if (strcmp(serialBuf_, "aim on") == 0) {
-      setEnabled(true);
-    } else if (strcmp(serialBuf_, "aim off") == 0) {
-      setEnabled(false);
-    } else if (strcmp(serialBuf_, "aim status") == 0 || strcmp(serialBuf_, "aim") == 0) {
-      printStatus();
-    } else {
-      Serial.println("Commands: aim on | aim off | aim status");
-    }
+bool AutoAim::handleCommand(const char* line) {
+  if (strcmp(line, "aim on") == 0) {
+    setEnabled(true);
+  } else if (strcmp(line, "aim off") == 0) {
+    setEnabled(false);
+  } else if (strcmp(line, "aim status") == 0 || strcmp(line, "aim") == 0) {
+    printStatus();
+  } else if (strncmp(line, "aim", 3) == 0) {
+    Serial.println("Commands: aim on | aim off | aim status");
+  } else {
+    return false;
   }
+  return true;
 }
 
 void AutoAim::printStatus() {
@@ -238,7 +229,7 @@ void AutoAim::update(bool idle) {
   if (!announced_) {
     announced_ = true;
     if (enabled_) {
-      Serial.println("AIM on at boot (no water yet). Acts only at the menu; any input pauses it. "
+      Serial.println("AIM on at boot. Acts only at the menu; any input pauses it. "
                      "Type 'aim off' to disable until reboot.");
     }
   }

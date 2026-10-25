@@ -90,7 +90,8 @@ float distanceFromSlide(float dxPerMm, float dxDeg);
 // Moves are driven
 // through each motor's own update(), so the existing soft limits and the
 // slider limit switch always apply (tilt can never pass ±360° from its
-// boot zero). Any user input pauses it. Never switches water.
+// boot zero). Any user input pauses it. Never switches water itself:
+// the Sprayer watches onTarget() / tracking().
 // ---------------------------------------------------------------------
 class AutoAim {
  public:
@@ -153,11 +154,21 @@ class AutoAim {
   // any auto-aim motion and pauses for kUserPauseMs.
   void notifyUserActivity();
 
-  // Reads "aim on" / "aim off" / "aim status" lines from Serial.
-  void pollSerial();
+  // Handles "aim on" / "aim off" / "aim status" lines; returns false
+  // for any other line.
+  bool handleCommand(const char* line);
 
   void setEnabled(bool on);
   bool enabled() const { return enabled_; }
+
+  // Centered on the hotspot (the "AIM on-target" state).
+  bool onTarget() const { return enabled_ && state_ == State::OnTarget; }
+  // Still engaged with a visible target: on target or making a
+  // correction. False once the hotspot is lost, paused, or off.
+  bool tracking() const {
+    return enabled_ && (state_ == State::OnTarget || state_ == State::Settling ||
+                        state_ == State::Moving);
+  }
 
  private:
   enum class State { Off, Waiting, Settling, Moving, OnTarget, LostHold, Paused };
@@ -218,7 +229,4 @@ class AutoAim {
   long lastProgressPos_[kAxes] = {0, 0, 0};
   unsigned long lastProgressMs_[kAxes] = {0, 0, 0};
   bool hitLimit_[kAxes] = {false, false, false};
-
-  char serialBuf_[24];
-  size_t serialLen_ = 0;
 };

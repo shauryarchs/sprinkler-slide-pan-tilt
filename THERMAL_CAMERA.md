@@ -6,7 +6,7 @@ This guide connects a **Waveshare MLX90640-D110** thermal camera to the **Arduin
 - **Phase 2, main firmware (section 9):** the camera runs inside the motor firmware and reports hotspots (direction, temperature) to the Serial Monitor while the motors work.
 - **Auto-aim (section 10):** slides, then pans/tilts, to center a hotspot. **On at boot.**
 
-Nothing is sent to the EmberSensor Worker, website, or iOS app. Auto-aim (section 10) moves the motors on its own when the camera sees a hotspot; nothing switches water yet.
+Nothing is sent to the EmberSensor Worker, website, or iOS app. Auto-aim (section 10) moves the motors on its own when the camera sees a hotspot. The water pump (section 11) can spray when auto-aim is on target, but only after `spray on` is typed each boot.
 
 Tracking issues: shauryarchs/embersensor-site#46 (Phase 1), shauryarchs/embersensor-site#49 (Phase 2)
 
@@ -213,7 +213,7 @@ A `hotspot=yes` line is also printed immediately when heat appears or clears.
 
 Auto-aim moves the arm so a confirmed hotspot ends up in the **centre** of the thermal image, which means the nozzle points at it. Tracking issue: shauryarchs/embersensor-site#52.
 
-**On at every boot** (shauryarchs/embersensor-site#56). Once you finish the boot pan/tilt setup screens and the device is at the menu, the arm aims at any confirmed hotspot by itself. Type `aim off` in the Serial Monitor to disable it until the next reboot. No water is switched; there is no pump yet (#53).
+**On at every boot** (shauryarchs/embersensor-site#56). Once you finish the boot pan/tilt setup screens and the device is at the menu, the arm aims at any confirmed hotspot by itself. Type `aim off` in the Serial Monitor to disable it until the next reboot. Auto-aim itself never switches water; spraying is section 11 and is off at boot.
 
 **What counts as a hotspot:** ≥ 50 °C and ≥ 15 °C above the scene. People never trigger it, but grills, car engines, and sun-baked surfaces can. To go back to requiring `aim on` after every boot, set `AutoAim::kEnabledAtBoot = false`.
 
@@ -242,7 +242,7 @@ Auto-aim moves the arm so a confirmed hotspot ends up in the **centre** of the t
 ### Output
 
 ```
-AIM on at boot (no water yet). Acts only at the menu; any input pauses it. Type 'aim off' to disable until reboot.
+AIM on at boot. Acts only at the menu; any input pauses it. Type 'aim off' to disable until reboot.
 AIM hotspot acquired
 AIM step 1: slide+50mm pan+0.0deg tilt+0.0deg (dx=+30.9 dy=-0.5)
 AIM small slide effect, probing 100mm next
@@ -301,3 +301,86 @@ AIM lost, back to waiting
 | Real motor directions vs. image (constants) | | ✅ steps 2–5 |
 | Real centring, settle time, no oscillation | | ✅ steps 3–5 |
 | User override on real hardware | | ✅ steps 6–7 |
+
+## 11. Water pump: spray when on target
+
+shauryarchs/embersensor-site#53. The main Nano drives the pump kit's relay through an NPN transistor, and the pump runs from **its own 5 V supply**. This is the setup validated on a spare Nano on branch `shaurya/test-pump-nano` (`PUMP_NANO_TRANSISTOR.md` there): the loop and on/off tests passed, and the Nano didn't drop USB.
+
+**Automatic spraying is OFF at every boot.** Type `spray on` in the Serial Monitor to enable it until the next reboot. Once it has been validated on hardware, a follow-up can turn it on at boot (`Sprayer::kAutoAtBoot`), the same way auto-aim went from #52 to #56.
+
+### Wiring
+
+**A. Nano → transistor → relay** (transistor 2N2222A / PN2222, flat face toward you, legs down: **E – B – C**)
+
+| From | To |
+|---|---|
+| Relay **VCC** | Nano **VBUS** (USB 5 V, so the Nano must be USB powered) |
+| Relay **GND** | Nano **GND** |
+| Relay **IN** | Transistor **collector** (right leg) |
+| Transistor **emitter** (left leg) | Nano **GND** |
+| Transistor **base** (middle leg) | 1 kΩ resistor → Nano **D2** |
+
+**B. Pump circuit** (its own 5 V supply, e.g. a wall charger with a cut USB cable; no connection to the Nano)
+
+| From | To |
+|---|---|
+| Supply **+5 V** | Relay **COM** |
+| Relay **NO** | Pump **red (+)** |
+| Pump **black (−)** | Supply **−** |
+| 100 µF capacitor | Across supply + and − (stripe to −) |
+
+D2 HIGH turns the transistor on, which pulls the relay's IN to GND: the relay turns on and the pump runs. D2 LOW leaves IN floating: relay off. The pump is also off while the Nano boots or is unplugged. Keep the pump wiring away from the Nano and the thermal camera wires. Never use a 9 V or 12 V supply for a 3–5 V pump. A flyback diode (1N4007 / 1N5819) across the pump, striped end to +, is recommended.
+
+### How it decides
+
+1. Auto-aim centres on a hotspot and prints `AIM on-target ...`. That's the cue: with `spray on` enabled, the pump starts (`SPRAY pump on (aim on target, ...)`).
+2. It keeps spraying while auto-aim stays engaged with the target, including small re-aim corrections if the flame moves.
+3. It stops when:
+   - the hotspot disappears (fire out or out of view);
+   - auto-aim pauses or leaves the menu, or you type `aim off` / `spray off`;
+   - **any user input** (encoder or website command);
+   - it has sprayed **60 s** non-stop. It then waits 10 s before it may spray again.
+
+### Serial commands
+
+| Command | Effect |
+|---|---|
+| `spray on` | Enable automatic spraying until reboot |
+| `spray off` | Disable it (stops an automatic spray) |
+| `spray status` | Auto on/off, pump state, aim on-target, cooldown |
+| `pump on` / `pump on <s>` | Manual test run, 3 s or 1–30 s |
+| `pump off` | Stop the pump now |
+
+### Step-by-step test
+
+| # | Do | Expected |
+|---|---|---|
+| 1 | Upload `main.ino`, open the Serial Monitor. Pump in water, pump supply plugged in. | `SPRAY auto off (type 'spray on' ...)`; relay light off; pump off through boot homing and setup. |
+| 2 | Finish the pan/tilt setup, stay at the menu. Type `pump on`. | Relay clicks, pump runs 3 s, `SPRAY pump off (timer ...)`. |
+| 3 | Put a safe heat source in view **without** typing `spray on`. | Auto-aim centres (`AIM on-target`), **no water**. |
+| 4 | Type `spray on`. | Pump starts within a moment: `SPRAY pump on (aim on target ...)`. |
+| 5 | Turn the encoder one click. | Pump stops: `SPRAY pump off (user input ...)`. Auto-aim resumes ~5 s later and the pump restarts once it's on target again. |
+| 6 | Remove the heat source. | Pump stops: `SPRAY pump off (target lost or aim paused ...)`. |
+| 7 | Leave it spraying on target for over a minute. | Stops at 60 s, `SPRAY cooling down 10s`, then restarts if still on target. |
+| 8 | Type `spray off`. | Pump stops and doesn't restart on target. |
+
+**Point the nozzle and the heat source somewhere safe to get wet,** and keep water off the electronics and the thermal camera (it isn't waterproof).
+
+### Tuning (`arduino-source/main/Sprayer.h`)
+
+| Constant | Default | Meaning |
+|---|---|---|
+| `kAutoAtBoot` | **false** | true = spray on target from boot (only after hardware validation and owner sign-off) |
+| `kMaxSprayMs` | 60000 | Longest continuous spray |
+| `kCooldownMs` | 10000 | Pause after a max-length spray |
+| `kManualDefaultS` / `kManualMaxS` | 3 / 30 | `pump on` run length |
+
+### What was validated where (spray)
+
+| Check | Done in software | Needs your hardware |
+|---|---|---|
+| Firmware compiles; no warnings from project code; 30% flash, 22% RAM | ✅ | |
+| Simulated against a stand-in auto-aim, all pass: pump off at `begin()`; no spray on target until `spray on`; sprays on target; keeps spraying through re-aim; stops on target lost, user input, `spray off`; 60 s limit and 10 s cooldown; manual `pump on` timer, refusal over 30 s, `pump off`; aim commands left to auto-aim; pin re-applied every loop | ✅ | |
+| Nano + transistor drives the relay; pump on its own supply; no USB drops | ✅ on a spare Nano (`shaurya/test-pump-nano`) | Re-check on the main board |
+| Steps 1–8 above | | ✅ |
+
