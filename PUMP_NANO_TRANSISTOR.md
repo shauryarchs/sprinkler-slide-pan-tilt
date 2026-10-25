@@ -143,6 +143,14 @@ replug the Nano, or double-tap reset; the esptool method in
      the pump should keep looping and the LED keep blinking; the button
      should still stop it.
 
+### Bench results (owner, 2026-10-24)
+
+- Nano + 2N2222A drives the relay; pump on its own 5 V wall charger.
+- `loop` and the on/off button work.
+- **The Nano did not disconnect from the laptop** (unlike the UNO R4
+  version on `shaurya/57_pump-bench-test`, which dropped USB after a few
+  pump runs).
+
 ## 7. Done in software vs. needs hardware
 
 - **Software (done):** compiles for `arduino:esp32:nano_nora` (core
@@ -151,5 +159,4 @@ replug the Nano, or double-tap reset; the esptool method in
   `on 30`, `off`, `cycle`, `loop`, button on/off toggle (10 min safety
   stop, stops a loop or cycle) and bounce, D2
   re-asserted every loop.
-- **Needs hardware:** everything in section 6, including the transistor
-  leg order and whether the Nano's USB drops with the pump running.
+- **Hardware (owner):** section 6 passed — see bench results above.
