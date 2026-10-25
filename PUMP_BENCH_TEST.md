@@ -18,6 +18,7 @@ Sketch: `arduino-source/pump-controller-r4/pump-controller-r4.ino`
 | 100 µF electrolytic capacitor (50 V) | Across the pump supply, smooths start/stop |
 | Breadboard | Spare |
 | Cup or bowl of water | The pump must be **under water** whenever it can run |
+| Optional: push button | Starts/stops `loop` without the Serial Monitor |
 
 ## 2. Why this setup
 
@@ -78,6 +79,16 @@ off. The coil draws about 70–90 mA, well within the R4's 5V pin.
   wires allow; twist the two pump wires together.
 - Do **not** use a 9 V or 12 V supply: it would burn out a 3–5 V pump.
 
+**C. Optional start/stop button**
+
+| From | To |
+|---|---|
+| Button leg 1 | R4 **pin 2** |
+| Button leg 2 | R4 **GND** |
+
+No resistor needed (the sketch uses the internal pull-up). Without a
+button, briefly touching a wire from pin 2 to GND does the same.
+
 ## 4. Software
 
 No extra libraries. Board: **Arduino UNO R4 WiFi** (or **Arduino Uno**
@@ -90,11 +101,17 @@ Serial Monitor at **115200** baud, line ending **Newline**:
 | `on` | Run 3 s, then stop |
 | `on <s>` | Run `s` seconds (1–30), then stop |
 | `cycle` | 5 × (5 s on, 5 s off) |
-| `off` | Stop now (also cancels `cycle`) |
+| `loop` | 30 s on, 5 s off, repeating until stopped |
+| `off` | Stop now (also cancels `cycle` / `loop`) |
 | `status` | Pump state, cycle progress, run count |
 | `help` | List commands |
 
+Button on pin 2: each press starts `loop`, or stops whatever is running.
+It works even after the R4's USB connection to the laptop drops.
+
 Safety:
+- Nothing runs at power-up; `loop` only starts from the command or the
+  button.
 - Pin 8 is set HIGH (relay off) both before and after `pinMode` at
   start-up — on the R4 the first write alone didn't stick and the pump
   started at power-up — and the relay state is re-applied every loop.
@@ -123,20 +140,37 @@ Safety:
 7. `cycle`
    - Expected: pump on 5 s / off 5 s, five times, then `CYCLE done`, and
      the R4 still answers `status`.
-8. Press the R4's reset button.
+8. `loop` (or press the button) and leave it running.
+   - Expected: 30 s on, 5 s off, repeating. Count how many runs pass
+     before the R4 drops off USB, if it does. Stop with the button,
+     `off`, or by unplugging the charger or the R4.
+   - If the Serial Monitor drops, the pump should keep looping and the
+     button should still stop it — that shows the R4 keeps running.
+9. Press the R4's reset button.
    - Expected: the pump stays off during and after the reset.
 
 Report the results on issue #57.
+
+### Bench results so far
+
+- Relay only (pump disconnected from NO): `on 30` and `cycle` 4/4 with
+  no USB disconnect.
+- With the pump on its own 5 V charger: 3 runs fine, disconnected on the
+  4th. So the pump's switch-off noise, not the relay, causes the drops.
+  Next mitigations: ceramic `104` capacitor across the pump terminals,
+  pump wiring moved away from the R4, flyback diode when available.
 
 ## 6. Done in software vs. needs hardware
 
 - **Software (done):**
   - Compiles for `arduino:renesas_uno:unor4wifi` and `arduino:avr:uno`
     with all warnings on; no warnings from the sketch.
-  - Host simulation (21 checks): off at boot, `on` timer, out-of-range
+  - Host simulation (all pass): off at boot, `on` timer, out-of-range
     and junk input refused, `on 30` stops at 30 s, `off`, timer reset,
     `cycle` gives exactly 5 × 5 s, `off` and `on` cancel a cycle, relay
-    state re-applied every loop.
+    state re-applied every loop; `loop` 30 s on / 5 s off repeating,
+    stopped by `off`, `on`, `cycle` or the button; button starts and
+    stops it (also during the off gap) and ignores a 20 ms bounce.
 - **Needs hardware:** everything in section 5, especially that the R4
   stays connected to the laptop after long runs with the pump on its own
   supply.

@@ -18,12 +18,18 @@
 //   on           run for kDefaultRunS seconds
 //   on <s>       run for <s> seconds (1 .. kMaxRunS)
 //   cycle        kCycleCount times: kCycleOnS on, kCycleOffS off
-//   off          stop now (also cancels a cycle)
+//   loop         repeat kLoopOnS on, kLoopOffS off until stopped
+//   off          stop now (also cancels a cycle or loop)
 //   status       print state
 //   help         list commands
+//
+// Button (optional) between pin 2 and GND: each press starts or stops
+// "loop". It works even when the USB connection to the laptop has
+// dropped. Nothing runs at power-up until a command or button press.
 
 namespace pins {
 const int kRelayIn = 8;  // to relay IN: LOW = relay on, HIGH = relay off
+const int kButton = 2;   // push button to GND (internal pull-up)
 }  // namespace pins
 
 const unsigned long kDefaultRunS = 3;
@@ -31,6 +37,9 @@ const unsigned long kMaxRunS = 30;
 const unsigned long kCycleCount = 5;
 const unsigned long kCycleOnS = 5;
 const unsigned long kCycleOffS = 5;
+const unsigned long kLoopOnS = 30;   // must be <= kMaxRunS
+const unsigned long kLoopOffS = 5;
+const unsigned long kButtonDebounceMs = 50;
 
 bool pumpOn = false;
 unsigned long pumpStartMs = 0;
@@ -40,6 +49,14 @@ unsigned long runCount = 0;
 bool cycleActive = false;
 unsigned long cycleStartMs = 0;
 unsigned long cyclesStarted = 0;
+
+bool loopActive = false;
+unsigned long loopOffSinceMs = 0;
+unsigned long loopRuns = 0;
+
+bool buttonDown = false;
+bool buttonRaw = false;
+unsigned long buttonChangedMs = 0;
 
 char cmdBuf[24];
 size_t cmdLen = 0;
@@ -84,6 +101,59 @@ void cancelCycle() {
   Serial.println(kCycleCount);
 }
 
+void cancelLoop() {
+  if (!loopActive) return;
+  loopActive = false;
+  Serial.print(F("LOOP stopped after "));
+  Serial.print(loopRuns);
+  Serial.println(F(" runs"));
+}
+
+void startLoop(const char* why) {
+  cancelCycle();
+  loopActive = true;
+  loopRuns = 0;
+  Serial.print(F("LOOP start ("));
+  Serial.print(why);
+  Serial.print(F("): "));
+  Serial.print(kLoopOnS);
+  Serial.print(F("s on, "));
+  Serial.print(kLoopOffS);
+  Serial.println(F("s off, until stopped"));
+  loopRuns++;
+  startPump(kLoopOnS, "loop");
+}
+
+// Restarts the pump kLoopOffS after each loop run ends.
+void updateLoop() {
+  if (!loopActive || pumpOn) return;
+  if (millis() - loopOffSinceMs < kLoopOffS * 1000) return;
+  loopRuns++;
+  Serial.print(F("LOOP run "));
+  Serial.println(loopRuns);
+  startPump(kLoopOnS, "loop");
+}
+
+// Button press toggles loop on/off.
+void readButton() {
+  bool raw = digitalRead(pins::kButton) == LOW;
+  unsigned long now = millis();
+  if (raw != buttonRaw) {
+    buttonRaw = raw;
+    buttonChangedMs = now;
+  }
+  if (buttonRaw == buttonDown || now - buttonChangedMs < kButtonDebounceMs) return;
+  buttonDown = buttonRaw;
+  if (!buttonDown) return;  // act on press, not release
+  if (loopActive || pumpOn) {
+    cancelCycle();
+    cancelLoop();
+    stopPump("button");
+  } else {
+    startLoop("button");
+  }
+}
+
 // Starts each "on" phase at a fixed time from the start of the cycle; the
 // run timer in loop() ends it, leaving the rest of the period off.
 void updateCycle() {
@@ -114,6 +184,10 @@ void printStatus() {
   } else {
     Serial.print(F("off"));
   }
+  if (loopActive) {
+    Serial.print(F(", loop run "));
+    Serial.print(loopRuns);
+  }
   if (cycleActive) {
     Serial.print(F(", cycle "));
     Serial.print(cyclesStarted);
@@ -127,7 +201,7 @@ void printStatus() {
 void printHelp() {
   Serial.print(F("Commands: on | on <1-"));
   Serial.print(kMaxRunS);
-  Serial.println(F(" seconds> | cycle | off | status | help"));
+  Serial.println(F(" seconds> | cycle | loop | off | status | help"));
 }
 
 void handleCommand(char* cmd) {
@@ -135,6 +209,7 @@ void handleCommand(char* cmd) {
 
   if (strcmp(cmd, "off") == 0) {
     cancelCycle();
+    cancelLoop();
     if (pumpOn) {
       stopPump("command");
     } else {
@@ -148,13 +223,18 @@ void handleCommand(char* cmd) {
       return;
     }
     cancelCycle();
+    cancelLoop();
     if (pumpOn) {
       Serial.print(F("PUMP timer reset: auto-off in "));
       Serial.print(seconds);
       Serial.println(F("s"));
     }
     startPump((unsigned long)seconds, "command");
+  } else if (strcmp(cmd, "loop") == 0) {
+    if (pumpOn) stopPump("loop start");
+    startLoop("command");
   } else if (strcmp(cmd, "cycle") == 0) {
+    cancelLoop();
     if (pumpOn) stopPump("cycle start");
     cycleActive = true;
     cycleStartMs = millis();
@@ -197,6 +277,7 @@ void setup() {
   digitalWrite(pins::kRelayIn, HIGH);
   pinMode(pins::kRelayIn, OUTPUT);
   digitalWrite(pins::kRelayIn, HIGH);
+  pinMode(pins::kButton, INPUT_PULLUP);
 
   Serial.begin(115200);
   Serial.println(F("# EmberSensor pump controller (single board)"));
@@ -206,11 +287,14 @@ void setup() {
 
 void loop() {
   readCommands();
+  readButton();
 
   if (pumpOn && millis() - pumpStartMs >= pumpRunMs) {
-    stopPump(cycleActive ? "cycle" : "timer");
+    stopPump(cycleActive ? "cycle" : loopActive ? "loop" : "timer");
+    loopOffSinceMs = millis();
   }
   updateCycle();
+  updateLoop();
 
   // Re-assert the relay every pass so the pin always matches pumpOn.
   setRelay(pumpOn);
