@@ -116,6 +116,29 @@ void SliderMotor1::home(LimitSwitch& limit) {
   startTimer();
 }
 
+void SliderMotor1::moveToBlocking(long targetSteps, LimitSwitch& limit) {
+  targetSteps = constrain(targetSteps, kMinPositionSteps, kMaxPositionSteps);
+
+  // Same blocking pulse path as homing: keep the ISR off STEP_PIN.
+  stopTimer();
+  enabled_ = false;
+  pulseActive_ = false;
+  stepCountdownUs_ = 0;
+  digitalWrite(stepPin_, LOW);
+
+  const uint8_t dir = (targetSteps > position_) ? kDirCw : kDirCcw;
+  digitalWrite(dirPin_, dir);
+  dir_ = dir;
+  delayMicroseconds(5);
+  while (position_ != targetSteps) {
+    if (dir == kDirCcw && limit.engaged()) break;  // never push into the switch
+    homingStepBlocking(kHomingIntervalFastUs);
+    position_ += (dir == kDirCw) ? 1 : -1;
+  }
+
+  startTimer();
+}
+
 void SliderMotor1::update(int dial, LimitSwitch& limit) {
   bool wantMove = (dial != 0);
   uint8_t desiredDir = (dial > 0) ? kDirCw : kDirCcw;
