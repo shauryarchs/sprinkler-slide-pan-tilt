@@ -10,9 +10,9 @@ class LimitSwitch;
 
 // Background FreeRTOS task that POSTs current motor + UI state to
 // https://<host>/api/motor/state. Heartbeat every kHeartbeatMs;
-// immediate push when mode / menuIndex / limitEngaged / sliderHomed
-// change (rate-limited to kMinIntervalMs so rapid toggles don't flood
-// the worker).
+// immediate push when mode / menuIndex / limitEngaged / sliderHomed /
+// pumpActive change (rate-limited to kMinIntervalMs so rapid toggles
+// don't flood the worker).
 //
 // Pinned to core 0 so HTTPS work (TLS handshake, blocking socket I/O)
 // stays off the core that runs the motor pulse timers and encoder ISR.
@@ -54,5 +54,6 @@ class StatePusher {
   int lastMenuIndex_;
   bool lastLimitEngaged_;
   bool lastHomed_;
+  bool lastPump_;
   unsigned long lastPushMs_;
 };

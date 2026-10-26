@@ -55,7 +55,8 @@ AutoAim autoAim(sliderMotor1, panMotor2, tiltMotor3, limitSwitch, thermalCamera)
 // in the Serial Monitor disables it until reboot.
 Sprayer sprayer(pins::kPump, autoAim);
 
-// Encoder input or a website command: pause auto-aim and stop the water.
+// Encoder input: pause auto-aim and stop the water. Remote commands go
+// through dispatchRemoteCommand() instead, which keeps a manual spray on.
 void notifyUserActivity() {
   autoAim.notifyUserActivity();
   sprayer.notifyUserActivity();
@@ -103,6 +104,7 @@ Mode mode = Mode::Menu;
 int menuIndex = 0;
 bool sliderHomed = false;
 volatile unsigned long lastSeqAck = 0;
+volatile bool pumpActive = false;
 const int kMenuItemCount = 4;
 
 // "Patrol" demo mode. The slider and pan motors bounce between their
@@ -410,12 +412,19 @@ void handleTiltSetup() {
 // intentionally ignore PanSetup / TiltSetup target modes — that flow
 // is one-shot at boot and not exposed to the remote.
 void dispatchRemoteCommand(const RemoteCommand& cmd) {
-  // Any remote command takes priority over auto-aim and stops the water.
-  notifyUserActivity();
+  // Any remote command takes priority over auto-aim and stops automatic
+  // spraying. A manual spray keeps going so the user can aim while it
+  // runs; only pumpOff or Stop (enterMode menu) ends it early.
+  autoAim.notifyUserActivity();
+  sprayer.notifyRemoteCommand();
   switch (cmd.kind) {
     case RemoteCmdKind::EnterMode:
       switch (cmd.targetMode) {
-        case Mode::Menu:             enterMenu();      break;
+        case Mode::Menu:
+          // The app's and website's Stop button: stop motors and water.
+          sprayer.remoteStop();
+          enterMenu();
+          break;
         case Mode::Motor1Control:    enterMotor1();    break;
         case Mode::Motor2Control:    enterMotor2();    break;
         case Mode::Motor3Control:    enterMotor3();    break;
@@ -468,6 +477,13 @@ void dispatchRemoteCommand(const RemoteCommand& cmd) {
       // bad payload can't push the motor past its max step rate.
       allMotorsPanSpeed = constrain(cmd.speed, 0, Encoder::kRange);
       break;
+    case RemoteCmdKind::PumpOn:
+      // Timed manual run; Sprayer caps it at kRemoteMaxS.
+      sprayer.remoteStart(cmd.seconds);
+      break;
+    case RemoteCmdKind::PumpOff:
+      sprayer.remoteStop();
+      break;
     default:
       break;
   }
@@ -499,6 +515,7 @@ void loop() {
   // setup screens own the motors.
   autoAim.update(mode == Mode::Menu);
   sprayer.update();
+  pumpActive = sprayer.pumpOn();
 
   if (millis() - lastDisplayUpdateMs >= kDisplayIntervalMs) {
     switch (mode) {

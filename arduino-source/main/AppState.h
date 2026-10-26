@@ -32,6 +32,11 @@ extern bool sliderHomed;
 // suffice.
 extern volatile unsigned long lastSeqAck;
 
+// Whether the water pump is running (automatic or manual). Written by
+// the main loop after sprayer.update(), read by StatePusher so the app
+// can show when water is flowing.
+extern volatile bool pumpActive;
+
 // Stable lowercase machine-readable names the website's control page
 // keys off (see docs/control.html → MODE_LABELS).
 inline const char* modeName(Mode m) {

@@ -23,6 +23,7 @@ StatePusher::StatePusher(SliderMotor1& slider, PanMotor2& pan, TiltMotor3& tilt,
       lastMenuIndex_(-1),
       lastLimitEngaged_(false),
       lastHomed_(false),
+      lastPump_(false),
       lastPushMs_(0) {}
 
 void StatePusher::begin(const char* host) {
@@ -41,9 +42,11 @@ void StatePusher::run() {
     const int mi = menuIndex;
     const bool le = limit_.engaged();
     const bool homed = sliderHomed;
+    const bool pump = pumpActive;
 
     const bool changed = (m != lastModeName_) || (mi != lastMenuIndex_) ||
-                         (le != lastLimitEngaged_) || (homed != lastHomed_);
+                         (le != lastLimitEngaged_) || (homed != lastHomed_) ||
+                         (pump != lastPump_);
 
     const unsigned long now = millis();
     const unsigned long sinceLast = now - lastPushMs_;
@@ -54,6 +57,7 @@ void StatePusher::run() {
       lastMenuIndex_ = mi;
       lastLimitEngaged_ = le;
       lastHomed_ = homed;
+      lastPump_ = pump;
       lastPushMs_ = now;
     }
 
@@ -68,12 +72,14 @@ void StatePusher::pushOnce() {
   snprintf(body, sizeof(body),
            "{\"mode\":\"%s\",\"menuIndex\":%d,\"sliderMm\":%ld,"
            "\"panDeg\":%ld,\"tiltDeg\":%ld,\"dial\":%d,"
-           "\"limitEngaged\":%s,\"homed\":%s,\"lastSeqAck\":%lu}",
+           "\"limitEngaged\":%s,\"homed\":%s,\"lastSeqAck\":%lu,"
+           "\"pumpOn\":%s}",
            modeName(mode), menuIndex, slider_.positionMm(),
            pan_.positionDegrees(), tilt_.positionDegrees(), enc_.position(),
            limit_.engaged() ? "true" : "false",
            sliderHomed ? "true" : "false",
-           lastSeqAck);
+           lastSeqAck,
+           pumpActive ? "true" : "false");
 
   String url = "https://";
   url += host_;

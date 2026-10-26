@@ -32,6 +32,8 @@ enum class RemoteCmdKind : uint8_t {
   NudgePan,
   NudgeTilt,
   SetAllMotorsPanSpeed,
+  PumpOn,
+  PumpOff,
 };
 
 struct RemoteCommand {
@@ -39,6 +41,7 @@ struct RemoteCommand {
   Mode targetMode;   // for EnterMode
   int speed;         // for SetSliderSpeed (clamped ±Encoder::kRange)
   int deltaDeg;      // for NudgePan / NudgeTilt (signed degrees, ±360)
+  int seconds;       // for PumpOn (Sprayer clamps to 1..kRemoteMaxS)
   unsigned long seq; // from worker — bumped into lastSeqAck after dispatch
 };
 

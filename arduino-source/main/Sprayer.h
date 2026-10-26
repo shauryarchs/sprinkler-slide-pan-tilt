@@ -21,9 +21,14 @@ class AutoAim;
 // stops when:
 //   - the hotspot is lost (fire out or out of view),
 //   - auto-aim pauses or leaves the menu, or "aim off" / "spray off",
-//   - any user input (encoder or website command),
+//   - any user input (encoder or app/website command),
 //   - kMaxSprayMs of continuous spraying (then waits kCooldownMs before
 //     it may spray again).
+//
+// Manual runs last at most kManualMaxS from the serial "pump on", or
+// kRemoteMaxS from the app's pumpOn, and stop on "pump off", pumpOff, the
+// encoder, or a remote Stop (enterMode menu). Other remote commands (mode,
+// speed, nudge) leave a manual run going so the user can aim while spraying.
 //
 // Serial commands:
 //   spray on | spray off | spray status
@@ -39,6 +44,8 @@ class Sprayer {
   static constexpr unsigned long kCooldownMs = 10000;
   static constexpr unsigned long kManualDefaultS = 3;
   static constexpr unsigned long kManualMaxS = 30;
+  // Longest manual run a remote pumpOn can request.
+  static constexpr unsigned long kRemoteMaxS = 10;
 
   Sprayer(int pumpPin, AutoAim& aim);
 
@@ -48,8 +55,17 @@ class Sprayer {
   // Call from loop() every iteration, after autoAim.update().
   void update();
 
-  // Any user input stops the water.
+  // Encoder input stops the water.
   void notifyUserActivity();
+
+  // A remote command arrived: stops an automatic run only, so a manual
+  // run keeps going while the user aims.
+  void notifyRemoteCommand();
+
+  // Remote manual run (pumpOn / pumpOff). seconds is clamped to
+  // 1..kRemoteMaxS.
+  void remoteStart(int seconds);
+  void remoteStop();
 
   // Handles "spray ..." and "pump ..." lines; returns false otherwise.
   bool handleCommand(const char* line);
