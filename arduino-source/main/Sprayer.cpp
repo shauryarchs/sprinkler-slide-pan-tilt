@@ -44,6 +44,19 @@ void Sprayer::notifyUserActivity() {
   if (pumpOn()) stop("user input");
 }
 
+void Sprayer::notifyRemoteCommand() {
+  if (run_ == Run::Auto) stop("remote command");
+}
+
+void Sprayer::remoteStart(int seconds) {
+  const long s = constrain(static_cast<long>(seconds), 1L, static_cast<long>(kRemoteMaxS));
+  start(Run::Manual, static_cast<unsigned long>(s) * 1000, "remote");
+}
+
+void Sprayer::remoteStop() {
+  if (pumpOn()) stop("remote");
+}
+
 void Sprayer::update() {
   if (!announced_) {
     announced_ = true;

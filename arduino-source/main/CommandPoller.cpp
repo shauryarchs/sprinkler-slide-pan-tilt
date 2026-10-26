@@ -155,5 +155,13 @@ bool CommandPoller::parseCommandJson(const char* json, RemoteCommand* out) {
     out->deltaDeg = static_cast<int>(deltaDeg);
     return true;
   }
+  if (strcmp(kindStr, "pumpOn") == 0) {
+    out->kind = RemoteCmdKind::PumpOn;
+    long seconds = 0;
+    if (!extractLongField(json, "seconds", &seconds)) return false;
+    out->seconds = static_cast<int>(seconds);
+    return true;
+  }
+  if (strcmp(kindStr, "pumpOff") == 0)        { out->kind = RemoteCmdKind::PumpOff;        return true; }
   return false;
 }
