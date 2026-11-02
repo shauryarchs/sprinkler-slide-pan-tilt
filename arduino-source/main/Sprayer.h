@@ -5,13 +5,15 @@
 class AutoAim;
 
 // ---------------------------------------------------------------------
-// Water pump control: sprays when auto-aim reports it is on target.
+// Water control: sprays when auto-aim reports it is on target. The water
+// now comes from a 12 V solenoid valve on a garden hose; "pump" in the names
+// and serial commands below refers to that valve (the original 5 V pump).
 //
 // Hardware: D2 -> 1 kOhm -> NPN transistor (2N2222A) base; collector to
 // the relay module's IN, emitter to GND. The relay module (low-trigger,
-// SRD-05VDC-SL-C) takes VCC from VBUS and switches the pump's own 5 V
-// supply through COM/NO. D2 HIGH = pump on, D2 LOW = pump off; the pump
-// is also off while the board boots or is unplugged.
+// SRD-05VDC-SL-C) takes VCC from VBUS and switches the solenoid's 12 V
+// supply (shared with the motors) through COM/NO. D2 HIGH = pump on, D2 LOW
+// = pump off; the relay is also off while the board boots or is unplugged.
 //
 // Automatic spraying is ON at boot (kAutoAtBoot; owner sign-off after
 // hardware validation, #53). "spray off" in the Serial Monitor disables it
