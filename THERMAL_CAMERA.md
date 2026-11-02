@@ -328,13 +328,15 @@ This replaced the prototype 5 V pump without a firmware change, so names and out
 
 | From | To |
 |---|---|
-| 12 V lane **+** | Relay **COM** |
-| Relay **NO** | Solenoid wire 1 |
+| 12 V adapter **+** / **−** | 12 V lane **+** / **GND** |
+| Capacitor | Across 12 V lane **+** and **GND** (stripe to GND) |
+| 12 V lane **+** | Relay **NO** |
+| Relay **COM** | Solenoid wire 1 |
 | Solenoid wire 2 | 12 V lane **GND** |
 
 D2 HIGH turns the transistor on, which pulls the relay's IN to GND: the relay turns on and water flows. D2 LOW leaves IN floating: relay off. The relay is also off while the Nano boots or is unplugged. Keep the solenoid wiring away from the Nano and the thermal camera wires, and keep all electronics dry and clear of the hose fittings.
 
-A flyback diode (1N4007) across the solenoid is recommended to protect the relay contacts and reduce noise on the shared 12 V supply. Fit it with the striped end on the wire from relay NO and the other end on the wire to GND.
+A flyback diode (1N4007) across the solenoid is recommended to protect the relay contacts and reduce noise on the shared 12 V supply. Fit it with the striped end on the wire from relay COM and the other end on the wire to GND.
 
 ### How it decides
 
