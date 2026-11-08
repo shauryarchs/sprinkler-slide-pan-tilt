@@ -1,0 +1,5 @@
+# KiCad local state and Python cache
+.history/
+*.lck
+*.kicad_prl
+__pycache__/
