@@ -2,14 +2,29 @@
 
 Encoder* Encoder::instance_ = nullptr;
 
+namespace {
+// Quadrature transition table, indexed by (previous state << 2) | new state,
+// where a state is (CLK << 1) | DT. +1/-1 are valid single steps; 0 means
+// no change or an impossible two-bit jump (bounce or a missed edge), which
+// is ignored. CLK falling while DT is HIGH is +1, matching the original
+// CLK-edge decoder's direction.
+const int8_t kQuadTable[16] = {
+    0, -1, 1, 0,
+    1, 0, 0, -1,
+    -1, 0, 0, 1,
+    0, 1, -1, 0,
+};
+}  // namespace
+
 Encoder::Encoder(int swPin, int dtPin, int clkPin)
     : swPin_(swPin),
       dtPin_(dtPin),
       clkPin_(clkPin),
       position_(0),
-      lastIsrUs_(0),
+      quadState_(0),
+      subSteps_(0),
       swState_(HIGH),
-      lastSwReading_(HIGH),
+      lastSwReading_(yesHIGH),
       lastDebounceMs_(0),
       pressStartMs_(0),
       longPressFired_(false),
@@ -26,10 +41,20 @@ void Encoder::begin() {
 
 void Encoder::suspend() {
   detachInterrupt(digitalPinToInterrupt(clkPin_));
+  detachInterrupt(digitalPinToInterrupt(dtPin_));
 }
 
 void Encoder::resume() {
-  attachInterrupt(digitalPinToInterrupt(clkPin_), clkIsrTrampoline, FALLING);
+  // Start from wherever the knob is now so turns made while suspended
+  // don't count.
+  quadState_ = readState();
+  subSteps_ = 0;
+  attachInterrupt(digitalPinToInterrupt(clkPin_), isrTrampoline, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(dtPin_), isrTrampoline, CHANGE);
+}
+
+int Encoder::readState() const {
+  return (digitalRead(clkPin_) << 1) | digitalRead(dtPin_);
 }
 
 void Encoder::syncSwState() {
@@ -49,6 +74,7 @@ int Encoder::position() const {
 void Encoder::reset() {
   noInterrupts();
   position_ = 0;
+  subSteps_ = 0;
   interrupts();
 }
 
@@ -57,6 +83,7 @@ void Encoder::set(int value) {
   if (value < -kRange) value = -kRange;
   noInterrupts();
   position_ = value;
+  subSteps_ = 0;
   interrupts();
 }
 
@@ -116,18 +143,35 @@ int Encoder::consumeDelta() {
   return d;
 }
 
-void IRAM_ATTR Encoder::clkIsrTrampoline() {
-  if (instance_) instance_->onClk();
+void IRAM_ATTR Encoder::isrTrampoline() {
+  if (instance_) instance_->onEdge();
 }
 
-void IRAM_ATTR Encoder::onClk() {
-  unsigned long now = micros();
-  if (now - lastIsrUs_ < kIsrDebounceUs) return;
-  lastIsrUs_ = now;
-  int dt = digitalRead(dtPin_);
-  if (dt == HIGH) {
-    if (position_ < kRange) position_++;
-  } else {
-    if (position_ > -kRange) position_--;
+// Called on every CLK or DT change. Follows the quadrature sequence and
+// counts one step when the knob settles at a rest state (a detent) after
+// moving at least half a detent in one direction. Bounce makes the state
+// flip back and forth, adding and removing the same step, so it cancels
+// out instead of being counted or reversing the direction.
+void IRAM_ATTR Encoder::onEdge() {
+  uint8_t state = (digitalRead(clkPin_) << 1) | digitalRead(dtPin_);
+  int8_t step = kQuadTable[(quadState_ << 2) | state];
+  quadState_ = state;
+  if (step == 0) return;
+
+  int8_t sub = subSteps_ + step;
+  if (sub > kTransitionsPerDetent) sub = kTransitionsPerDetent;
+  if (sub < -kTransitionsPerDetent) sub = -kTransitionsPerDetent;
+
+  // Every module rests with CLK and DT HIGH (pull-ups); half-cycle
+  // modules also rest with both LOW.
+  bool atRest = state == 0b11 || (kTransitionsPerDetent == 2 && state == 0b00);
+  if (atRest) {
+    if (sub >= kTransitionsPerDetent / 2) {
+      if (position_ < kRange) position_++;
+    } else if (sub <= -kTransitionsPerDetent / 2) {
+      if (position_ > -kRange) position_--;
+    }
+    sub = 0;
   }
+  subSteps_ = sub;
 }

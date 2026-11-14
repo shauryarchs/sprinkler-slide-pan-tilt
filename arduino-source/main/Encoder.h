@@ -4,15 +4,23 @@
 
 // KY-040 quadrature encoder with a momentary SW pushbutton.
 //
-// CLK/DT are read via an ISR (display.display() blocks ~30 ms on I2C, so
-// polling would miss ticks). Each detent moves the signed dial position by
-// ±1, clamped to ±range. The SW button has a short-press behavior (zero
-// the dial immediately) handled internally, and a long-press event the
-// caller consumes via consumeLongPress() (typically to trigger a re-home).
+// CLK/DT are read via ISRs (display.display() blocks ~30 ms on I2C, so
+// polling would miss ticks). Both pins interrupt on every change and a
+// quadrature state machine follows the full CLK/DT sequence, ignoring
+// impossible jumps caused by contact bounce. Each detent moves the signed
+// dial position by ±1, clamped to ±range. The SW button has a short-press
+// behavior (zero the dial immediately) handled internally, and a long-press
+// event the caller consumes via consumeLongPress() (typically to trigger a
+// re-home).
 class Encoder {
  public:
   static constexpr int kRange = 20;
-  static constexpr unsigned long kIsrDebounceUs = 1500;
+  // Valid CLK/DT transitions per detent (click). Most KY-040 modules go
+  // through the full 4-step sequence per click and rest with CLK and DT
+  // both HIGH. Set to 2 for modules that rest at both HIGH/HIGH and
+  // LOW/LOW (half a cycle per click); those count only every other click
+  // when this is 4.
+  static constexpr int kTransitionsPerDetent = 4;
   static constexpr unsigned long kSwDebounceMs = 50;
   static constexpr unsigned long kLongPressMs = 1500;
 
@@ -36,7 +44,7 @@ class Encoder {
   // navigation (menu scrolling) rather than an absolute speed setpoint.
   int consumeDelta();
 
-  // Pause/resume the CLK ISR. Use around blocking operations like
+  // Pause/resume the CLK/DT ISRs. Use around blocking operations like
   // homing where dial spins should be ignored.
   void suspend();
   void resume();
@@ -55,15 +63,17 @@ class Encoder {
 
  private:
   static Encoder* instance_;
-  static void IRAM_ATTR clkIsrTrampoline();
-  void IRAM_ATTR onClk();
+  static void IRAM_ATTR isrTrampoline();
+  void IRAM_ATTR onEdge();
+  int readState() const;
 
   int swPin_;
   int dtPin_;
   int clkPin_;
 
   volatile int position_;
-  volatile unsigned long lastIsrUs_;
+  volatile uint8_t quadState_;  // last (CLK << 1) | DT
+  volatile int8_t subSteps_;    // valid transitions since the last rest
 
   int swState_;
   int lastSwReading_;
@@ -75,3 +85,6 @@ class Encoder {
 };
 
 static_assert(Encoder::kRange > 0, "encoder range must be positive");
+static_assert(Encoder::kTransitionsPerDetent == 2 ||
+                  Encoder::kTransitionsPerDetent == 4,
+              "encoder detents are 2 or 4 transitions");
