@@ -24,7 +24,7 @@ Encoder::Encoder(int swPin, int dtPin, int clkPin)
       quadState_(0),
       subSteps_(0),
       swState_(HIGH),
-      lastSwReading_(yesHIGH),
+      lastSwReading_(HIGH),
       lastDebounceMs_(0),
       pressStartMs_(0),
       longPressFired_(false),
